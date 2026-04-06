@@ -89,7 +89,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               {/* BRANDING */}
               <div className="h-16 flex items-center px-6 border-b border-slate-200 dark:border-zinc-800 shrink-0">
                 <Store className="h-6 w-6 text-indigo-600 mr-2" />
-                <span className="font-black text-xl tracking-tight text-slate-900 dark:text-white">Tendeco</span>
+                <span className="font-black text-xl tracking-tight text-slate-900 dark:text-white">Tommasi</span>
               </div>
 
               {/* INFO DEL USUARIO */}
