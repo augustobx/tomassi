@@ -1,0 +1,9 @@
+﻿src/app/actions/afip.ts(1,18): error TS7016: Could not find a declaration file for module '@afipsdk/afip.js'. 'C:/xampp/htdocs/tendeco/node_modules/@afipsdk/afip.js/src/Afip.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/afipsdk__afip.js` if it exists or add a new declaration (.d.ts) file containing `declare module '@afipsdk/afip.js';`
+src/app/clientes/page.tsx(628,74): error TS2322: Type 'Dispatch<SetStateAction<string>>' is not assignable to type '(value: string | null, eventDetails: SelectRootChangeEventDetails) => void'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type 'string | null' is not assignable to type 'SetStateAction<string>'.
+      Type 'null' is not assignable to type 'SetStateAction<string>'.
+src/app/configuracion/page.tsx(155,68): error TS2339: Property 'logo_url' does not exist on type '{ razon_social: string; nombre_fantasia: string; cuit: string; inicio_actividad: string; condicion_iva: string; direccion: string; telefono: string; redes_sociales: string; punto_venta: number; cuit_facturacion: string; certificado_crt: string; clave_privada: string; modo_produccion_afip: boolean; }'.
+test-afip.ts(1,18): error TS7016: Could not find a declaration file for module '@afipsdk/afip.js'. 'C:/xampp/htdocs/tendeco/node_modules/@afipsdk/afip.js/src/Afip.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/afipsdk__afip.js` if it exists or add a new declaration (.d.ts) file containing `declare module '@afipsdk/afip.js';`

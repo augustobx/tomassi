@@ -1,0 +1,625 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// PROVEEDORES, MARCAS Y CATEGORÍAS (CASCADA)
+// ==========================================
+
+model Proveedor {
+  id                 Int        @id @default(autoincrement())
+  nombre             String     @unique
+  cuit               String?
+  telefono           String?
+  email              String?
+  direccion          String?
+  notas              String?
+  activo             Boolean    @default(true)
+  aumento_porcentaje Float      @default(0)
+  marcas             Marca[]
+  productos          Producto[]
+  creadoEn           DateTime   @default(now())
+}
+
+model Marca {
+  id                 Int         @id @default(autoincrement())
+  nombre             String
+  proveedorId        Int
+  proveedor          Proveedor   @relation(fields: [proveedorId], references: [id])
+  aumento_porcentaje Float       @default(0)
+  categorias         Categoria[]
+  productos          Producto[]
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@unique([nombre, proveedorId])
+}
+
+model Categoria {
+  id                 Int        @id @default(autoincrement())
+  nombre             String
+  marcaId            Int?
+  marca              Marca?     @relation(fields: [marcaId], references: [id])
+  aumento_porcentaje Float      @default(0)
+  productos          Producto[]
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+}
+
+// ==========================================
+// PRODUCTO MAESTRO
+// ==========================================
+
+model Producto {
+  id                   Int                   @id @default(autoincrement())
+  codigo_articulo      String                @unique
+  codigo_barras        String                @default("0")
+  fecha_ingreso        DateTime              @default(now())
+  nombre_producto      String
+  proveedorId          Int
+  proveedor            Proveedor             @relation(fields: [proveedorId], references: [id])
+  marcaId              Int?
+  marca                Marca?                @relation(fields: [marcaId], references: [id])
+  categoriaId          Int?
+  categoria            Categoria?            @relation(fields: [categoriaId], references: [id])
+  alicuota_iva         Float                 @default(21)
+  precio_costo         Float
+  descuento_proveedor  Float                 @default(0)
+  stock_recomendado    Float                 @default(0)
+  tipo_medicion        TipoMedicion          @default(UNIDAD)
+  moneda               Moneda                @default(ARS)
+  listas_precios       ProductoListaPrecio[]
+  detalles_venta       DetalleVenta[]
+  detalles_presupuesto DetallePresupuesto[]
+
+  stocks            StockUbicacion[]
+  movimientos_stock MovimientoStock[]
+
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  historial_inventario HistorialInventario[]
+  historial_precios    HistorialPrecio[]
+  DetallePedido        DetallePedido[]
+}
+
+enum TipoMedicion {
+  UNIDAD
+  KILO
+  LITRO
+  METROS
+  CAJA
+  PACK
+}
+
+enum Moneda {
+  ARS
+  USD
+}
+
+// ==========================================
+// LISTAS DE PRECIOS
+// ==========================================
+
+model ListaPrecio {
+  id               Int                   @id @default(autoincrement())
+  nombre           String                @unique
+  margen_defecto   Float
+  productos_listas ProductoListaPrecio[]
+  clientes_default Cliente[]             @relation("ClienteListaDefault")
+  clientes_listas  ClienteListaPrecio[]
+  ventas           Venta[]               @relation("VentaLista")
+  presupuestos     Presupuesto[]
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  Pedido           Pedido[]
+}
+
+model ProductoListaPrecio {
+  productoId           Int
+  listaPrecioId        Int
+  margen_personalizado Float?
+
+  producto    Producto    @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  listaPrecio ListaPrecio @relation(fields: [listaPrecioId], references: [id], onDelete: Cascade)
+
+  @@id([productoId, listaPrecioId])
+}
+
+// ==========================================
+// CLIENTES, VENTAS Y CUENTAS CORRIENTES
+// ==========================================
+
+model Cliente {
+  id                  Int     @id @default(autoincrement())
+  nombre_razon_social String
+  dni_cuit            String? @unique
+  condicion_iva       String  @default("CONSUMIDOR_FINAL")
+  direccion           String?
+  telefono            String?
+  comentarios         String? @db.Text
+
+  comprobante_default String @default("COMPROBANTE_X")
+
+  limite_credito   Float?
+  dias_aviso_deuda Int    @default(30)
+
+  lista_default_id  Int?
+  lista_default     ListaPrecio?         @relation("ClienteListaDefault", fields: [lista_default_id], references: [id])
+  listas_permitidas ClienteListaPrecio[]
+
+  ventas         Venta[]
+  presupuestos   Presupuesto[]
+  movimientos_cc MovimientoCuentaCorriente[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Pedido    Pedido[]
+}
+
+model ClienteListaPrecio {
+  clienteId     Int
+  listaPrecioId Int
+  cliente       Cliente     @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  listaPrecio   ListaPrecio @relation(fields: [listaPrecioId], references: [id], onDelete: Cascade)
+
+  @@id([clienteId, listaPrecioId])
+}
+
+model SecuenciaFactura {
+  id               Int    @id @default(autoincrement())
+  tipo_comprobante String @unique
+  punto_venta      Int    @default(1)
+  numero_actual    Int    @default(0)
+}
+
+model Venta {
+  id                 Int       @id @default(autoincrement())
+  fecha_emision      DateTime  @default(now())
+  tipo_comprobante   String    @default("COMPROBANTE_X")
+  punto_venta        Int
+  numero_comprobante Int
+  cae                String?
+  cae_vto            DateTime?
+  importe_neto       Float     @default(0)
+  importe_iva        Float     @default(0)
+
+  clienteId Int
+  cliente   Cliente @relation(fields: [clienteId], references: [id])
+
+  listaPrecioId Int
+  listaPrecio   ListaPrecio @relation("VentaLista", fields: [listaPrecioId], references: [id])
+
+  metodo_pago MetodoPago @default(CONTADO)
+
+  estado_pago          EstadoPago @default(PAGADO)
+  saldo_pendiente      Float      @default(0)
+  fecha_vencimiento_cc DateTime?
+
+  requiere_envio   Boolean @default(false)
+  direccion_envio  String?
+  notas_venta      String? @db.Text
+  comentario_venta String? @db.Text
+
+  subtotal         Float
+  descuento_global Float @default(0)
+  total            Float
+
+  presupuestoOrigenId Int?
+
+  sucursalId Int?
+  sucursal   Sucursal? @relation(fields: [sucursalId], references: [id])
+
+  depositoOrigenId Int?
+  depositoOrigen   Deposito? @relation("VentaDeposito", fields: [depositoOrigenId], references: [id])
+
+  usuarioId Int?
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id])
+
+  detalles          DetalleVenta[]
+  pagos             PagoVenta[]
+  pagos_recibidos   MovimientoCuentaCorriente[]
+  movimientos_stock MovimientoStock[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tipo_comprobante, punto_venta, numero_comprobante])
+}
+
+model DetalleVenta {
+  id      Int   @id @default(autoincrement())
+  ventaId Int
+  venta   Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id])
+
+  cantidad             Float
+  precio_unitario      Float
+  descuento_individual Float @default(0)
+  precio_final         Float
+  subtotal             Float
+
+  cantidad_devuelta Float @default(0)
+}
+
+// === PAGOS MÚLTIPLES POR VENTA ===
+model PagoVenta {
+  id          Int        @id @default(autoincrement())
+  ventaId     Int
+  venta       Venta      @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  metodo_pago MetodoPago
+  monto       Float
+}
+
+// === LIBRO MAYOR DE CUENTAS CORRIENTES ===
+model MovimientoCuentaCorriente {
+  id Int @id @default(autoincrement())
+
+  clienteId Int
+  cliente   Cliente @relation(fields: [clienteId], references: [id])
+
+  ventaId Int?
+  venta   Venta? @relation(fields: [ventaId], references: [id])
+
+  usuarioId Int?
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id])
+
+  tipo           TipoMovimiento
+  monto          Float
+  descuento_pago Float          @default(0)
+  metodo_pago    MetodoPago     @default(CONTADO)
+
+  fecha DateTime @default(now())
+  notas String?  @db.Text
+}
+
+enum MetodoPago {
+  CONTADO
+  CUENTA_CORRIENTE
+  TARJETA
+  TRANSFERENCIA
+  SALDO_A_FAVOR
+}
+
+enum EstadoPago {
+  PAGADO
+  PENDIENTE
+  PARCIAL
+}
+
+enum TipoMovimiento {
+  CARGO
+  ABONO
+}
+
+// ==========================================
+// MÓDULO DE PRESUPUESTOS
+// ==========================================
+
+model Presupuesto {
+  id     Int @id @default(autoincrement())
+  numero Int @unique
+
+  clienteId Int
+  cliente   Cliente @relation(fields: [clienteId], references: [id])
+
+  listaPrecioId Int
+  listaPrecio   ListaPrecio @relation(fields: [listaPrecioId], references: [id])
+
+  fecha         DateTime          @default(now())
+  vigencia_dias Int               @default(15)
+  estado        EstadoPresupuesto @default(PENDIENTE)
+
+  subtotal         Float
+  descuento_global Float   @default(0)
+  total            Float
+  notas            String? @db.Text
+
+  detalles DetallePresupuesto[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DetallePresupuesto {
+  id            Int         @id @default(autoincrement())
+  presupuestoId Int
+  presupuesto   Presupuesto @relation(fields: [presupuestoId], references: [id], onDelete: Cascade)
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id])
+
+  cantidad             Float
+  precio_unitario      Float
+  descuento_individual Float @default(0)
+  precio_final         Float
+  subtotal             Float
+}
+
+enum EstadoPresupuesto {
+  PENDIENTE
+  CONVERTIDO
+  VENCIDO
+  CANCELADO
+}
+
+// ==========================================
+// REGISTRO DE MÉTRICAS DE INVENTARIO
+// ==========================================
+
+model HistorialInventario {
+  id         Int      @id @default(autoincrement())
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  tipo_registro String
+
+  stock_anterior    Float
+  stock_nuevo       Float
+  cantidad_agregada Float
+
+  precio_anterior Float
+  precio_nuevo    Float
+
+  fecha DateTime @default(now())
+
+  usuarioId Int?
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id])
+}
+
+// ==========================================
+// MÓDULO DE CAJA DIARIA
+// ==========================================
+
+model CajaDiaria {
+  id             Int       @id @default(autoincrement())
+  fecha_apertura DateTime  @default(now())
+  fecha_cierre   DateTime?
+
+  saldo_inicial  Float
+  saldo_esperado Float?
+  saldo_real     Float?
+  diferencia     Float?
+  ganancia       Float?
+
+  estado EstadoCaja @default(ABIERTA)
+
+  sucursalId Int?
+  sucursal   Sucursal? @relation(fields: [sucursalId], references: [id])
+
+  movimientos MovimientoCaja[]
+}
+
+model MovimientoCaja {
+  id     Int        @id @default(autoincrement())
+  cajaId Int
+  caja   CajaDiaria @relation(fields: [cajaId], references: [id])
+
+  tipo        TipoMovimientoCaja
+  metodo_pago MetodoPago?
+  monto       Float
+  descripcion String
+
+  ventaId Int?
+  fecha   DateTime @default(now())
+
+  usuarioId Int?
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id])
+}
+
+enum EstadoCaja {
+  ABIERTA
+  CERRADA
+}
+
+enum TipoMovimientoCaja {
+  APERTURA
+  INGRESO_MANUAL
+  EGRESO_MANUAL
+  VENTA
+  COBRO_CC
+}
+
+// ==========================================
+// CONFIGURACIÓN DE LA EMPRESA
+// ==========================================
+
+model EmpresaConfig {
+  id                   Int     @id @default(1)
+  razon_social         String  @default("TENDENCO PINTURAS")
+  nombre_fantasia      String  @default("Tendeco")
+  cuit                 String  @default("00-00000000-0")
+  inicio_actividad     String  @default("01/01/2024")
+  condicion_iva        String  @default("Responsable Inscripto")
+  punto_venta          Int     @default(1)
+  modo_produccion_afip Boolean @default(false)
+  cuit_facturacion     String?
+  certificado_crt      String? @db.Text
+  clave_privada        String? @db.Text
+  direccion            String  @default("San Pedro, Buenos Aires")
+  telefono             String  @default("11-0000-0000")
+  redes_sociales       String  @default("@tendeco.pinturas")
+  logo_url             String?
+}
+
+// ==========================================
+// SISTEMA DE USUARIOS Y PERMISOS
+// ==========================================
+
+model Usuario {
+  id       Int      @id @default(autoincrement())
+  nombre   String
+  username String   @unique
+  password String
+  rol      String   @default("CAJERO")
+  permisos String   @default("[\"VENTAS\", \"CLIENTES\"]")
+  activo   Boolean  @default(true)
+  creadoEn DateTime @default(now())
+
+  sucursalId        Int?
+  sucursal          Sucursal?                   @relation(fields: [sucursalId], references: [id])
+  movimientos_stock MovimientoStock[]
+  historial_inv     HistorialInventario[]
+  ventas_creadas    Venta[]
+  movs_caja_creados MovimientoCaja[]
+  movs_cc_creados   MovimientoCuentaCorriente[]
+  Pedido            Pedido[]
+}
+
+// ==========================================
+// AUDITORÍA DE INFLACIÓN Y PRECIOS
+// ==========================================
+
+model HistorialPrecio {
+  id                    Int      @id @default(autoincrement())
+  productoId            Int
+  producto              Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  precio_costo_anterior Float
+  precio_costo_nuevo    Float
+  porcentaje_cambio     Float    @default(0)
+  motivo                String
+  fecha                 DateTime @default(now())
+}
+
+// ==========================================
+// MÓDULO DE SUCURSALES Y DEPÓSITOS (INVENTARIO)
+// ==========================================
+
+model Sucursal {
+  id        Int     @id @default(autoincrement())
+  nombre    String  @unique
+  direccion String?
+  telefono  String?
+  estado    Boolean @default(true)
+
+  depositos Deposito[]
+  usuarios  Usuario[]
+  cajas     CajaDiaria[]
+  ventas    Venta[]
+
+  createdAt DateTime @default(now())
+}
+
+model Deposito {
+  id         Int       @id @default(autoincrement())
+  nombre     String
+  sucursalId Int?
+  sucursal   Sucursal? @relation(fields: [sucursalId], references: [id])
+  estado     Boolean   @default(true)
+
+  stocks             StockUbicacion[]
+  movimientosOrigen  MovimientoStock[] @relation("MovOrigen")
+  movimientosDestino MovimientoStock[] @relation("MovDestino")
+  ventas             Venta[]           @relation("VentaDeposito")
+
+  createdAt DateTime @default(now())
+}
+
+model StockUbicacion {
+  productoId Int
+  depositoId Int
+  cantidad   Float @default(0)
+
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  deposito Deposito @relation(fields: [depositoId], references: [id], onDelete: Cascade)
+
+  @@id([productoId, depositoId])
+}
+
+model MovimientoStock {
+  id         Int      @id @default(autoincrement())
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  depositoOrigenId Int?
+  depositoOrigen   Deposito? @relation("MovOrigen", fields: [depositoOrigenId], references: [id])
+
+  depositoDestinoId Int?
+  depositoDestino   Deposito? @relation("MovDestino", fields: [depositoDestinoId], references: [id])
+
+  cantidad Float
+  tipo     TipoMovimientoStock
+  motivo   String?
+
+  usuarioId Int?
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id])
+
+  ventaId Int? // Si proviene de una venta
+  venta   Venta? @relation(fields: [ventaId], references: [id])
+
+  fecha DateTime @default(now())
+}
+
+enum TipoMovimientoStock {
+  ENTRADA
+  SALIDA
+  TRANSFERENCIA
+  AJUSTE
+  VENTA
+  DEVOLUCION
+  INGRESO_COMPRA
+}
+
+// ==========================================
+// MÓDULO DE PEDIDOS (PWA VENDEDORES)
+// ==========================================
+
+model Pedido {
+  id     Int      @id @default(autoincrement())
+  numero Int      @unique
+  fecha  DateTime @default(now())
+
+  clienteId Int
+  cliente   Cliente @relation(fields: [clienteId], references: [id])
+
+  usuarioId Int
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  listaPrecioId Int
+  listaPrecio   ListaPrecio @relation(fields: [listaPrecioId], references: [id])
+
+  estado EstadoPedido @default(PENDIENTE)
+
+  subtotal         Float
+  descuento_global Float   @default(0)
+  total            Float
+  notas            String? @db.Text
+
+  detalles DetallePedido[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  metodo_pago      String         @default("EFECTIVO") // "EFECTIVO" o "CUENTA_CORRIENTE"
+  monto_abonado    Float?         // Para registrar con cuánto pagó
+  ventaId          Int?           // ID de la Venta generada al facturar
+}
+
+model DetallePedido {
+  id       Int    @id @default(autoincrement())
+  pedidoId Int
+  pedido   Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id])
+
+  cantidad             Float
+  precio_unitario      Float
+  descuento_individual Float @default(0)
+  precio_final         Float
+  subtotal             Float
+}
+
+enum EstadoPedido {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+  FACTURADO
+  CANCELADO
+}
