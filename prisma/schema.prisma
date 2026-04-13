@@ -49,6 +49,7 @@ model Categoria {
   productos          Producto[]
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
+  limite_desc_categoria   Float?
 }
 
 // ==========================================
