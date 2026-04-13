@@ -153,7 +153,7 @@ export default function RendimientoVendedoresPage() {
                                 <th className="px-5 py-3 font-semibold">Vendedor / Cliente</th>
                                 <th className="px-5 py-3 font-semibold text-right">Facturado</th>
                                 <th className="px-5 py-3 font-semibold text-center">Dto Global Aplicado</th>
-                                <th className="px-5 py-3 font-semibold text-center">Límite Permitido</th>
+                                <th className="px-5 py-3 font-semibold text-center">Límite y Control</th>
                                 <th className="px-5 py-3 font-semibold text-right">Comisión a Pagar</th>
                             </tr>
                         </thead>
@@ -179,8 +179,18 @@ export default function RendimientoVendedoresPage() {
                                                     {v.dtoPorcentaje.toFixed(1)}%
                                                 </Badge>
                                             </td>
-                                            <td className="px-5 py-3 text-center text-xs font-bold text-slate-400">
-                                                Max: {v.limiteAplicado}%
+                                            <td className="px-5 py-3 text-center">
+                                                <p className="text-xs font-bold text-slate-400">Max: {v.limiteAplicado}%</p>
+                                                {/* ÉSTA ES LA LÓGICA NUEVA DE EXCEDENTE GLOBAL O ITEM */}
+                                                {v.excedenteGlobal > 0 ? (
+                                                    <p className="text-[10px] font-black text-red-500 mt-1 bg-red-50 py-0.5 px-2 rounded-md inline-block">
+                                                        Excede: +{v.excedenteGlobal.toFixed(1)}%
+                                                    </p>
+                                                ) : v.esPenalizado ? (
+                                                    <p className="text-[9px] font-black text-orange-500 mt-1 bg-orange-50 py-0.5 px-2 rounded-md inline-block">
+                                                        Exceso en artículos
+                                                    </p>
+                                                ) : null}
                                             </td>
                                             <td className="px-5 py-3 text-right">
                                                 <div className="flex flex-col items-end">
@@ -202,34 +212,38 @@ export default function RendimientoVendedoresPage() {
                                                                     <th className="px-4 py-2 font-bold text-center">Cant.</th>
                                                                     <th className="px-4 py-2 font-bold text-right">Precio Unit.</th>
                                                                     <th className="px-4 py-2 font-bold text-center">Dto. Indiv.</th>
-                                                                    <th className="px-4 py-2 font-bold text-center">Límite Categoría</th>
+                                                                    <th className="px-4 py-2 font-bold text-center">Control de Límite</th>
                                                                     <th className="px-4 py-2 font-bold text-right">Subtotal</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="divide-y divide-indigo-50">
-                                                                {v.detalles?.map((det: any, index: number) => {
-                                                                    const limCat = det.producto?.categoria?.limite_desc_categoria;
-                                                                    const excede = limCat !== null && limCat !== undefined && det.descuento_individual > limCat;
-                                                                    return (
-                                                                        <tr key={index} className="hover:bg-indigo-50/30">
-                                                                            <td className="px-4 py-2">
-                                                                                <p className="text-[9px] font-mono text-slate-400">{det.producto?.codigo_articulo || 'S/C'}</p>
-                                                                                <p className="text-xs font-bold text-slate-700">{det.producto?.nombre_producto}</p>
-                                                                            </td>
-                                                                            <td className="px-4 py-2 text-xs font-semibold text-center">{det.cantidad}</td>
-                                                                            <td className="px-4 py-2 text-xs font-medium text-slate-500 text-right">${det.precio_unitario.toFixed(2)}</td>
-                                                                            <td className="px-4 py-2 text-center">
-                                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${excede ? 'text-red-500 bg-red-50 border border-red-200' : 'text-slate-600'}`}>
-                                                                                    {det.descuento_individual}%
-                                                                                </span>
-                                                                            </td>
-                                                                            <td className="px-4 py-2 text-center text-[10px] font-bold text-slate-400">
-                                                                                {limCat !== null && limCat !== undefined ? `${limCat}%` : 'Usar Global'}
-                                                                            </td>
-                                                                            <td className="px-4 py-2 text-xs font-black text-slate-800 text-right">${det.subtotal.toFixed(2)}</td>
-                                                                        </tr>
-                                                                    )
-                                                                })}
+                                                                {v.detalles?.map((det: any, index: number) => (
+                                                                    <tr key={index} className="hover:bg-indigo-50/30">
+                                                                        <td className="px-4 py-2">
+                                                                            <p className="text-[9px] font-mono text-slate-400">{det.producto?.codigo_articulo || 'S/C'}</p>
+                                                                            <p className="text-xs font-bold text-slate-700">{det.producto?.nombre_producto}</p>
+                                                                        </td>
+                                                                        <td className="px-4 py-2 text-xs font-semibold text-center">{det.cantidad}</td>
+                                                                        <td className="px-4 py-2 text-xs font-medium text-slate-500 text-right">${det.precio_unitario.toFixed(2)}</td>
+                                                                        <td className="px-4 py-2 text-center">
+                                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${det.excedente > 0 ? 'text-red-500 bg-red-50 border border-red-200' : 'text-slate-600'}`}>
+                                                                                {det.descuento_individual}%
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-4 py-2 text-center">
+                                                                            <p className="text-[10px] font-bold text-slate-400">
+                                                                                {det.producto?.categoria?.limite_desc_categoria !== null && det.producto?.categoria?.limite_desc_categoria !== undefined ? `${det.producto.categoria.limite_desc_categoria}%` : 'Global'}
+                                                                            </p>
+                                                                            {/* ÉSTA ES LA LÓGICA DE EXCEDENTE POR ARTÍCULO */}
+                                                                            {det.excedente > 0 && (
+                                                                                <p className="text-[9px] font-black text-red-500 mt-0.5">
+                                                                                    Excede: +{det.excedente.toFixed(1)}%
+                                                                                </p>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-4 py-2 text-xs font-black text-slate-800 text-right">${det.subtotal.toFixed(2)}</td>
+                                                                    </tr>
+                                                                ))}
                                                             </tbody>
                                                         </table>
                                                     </div>

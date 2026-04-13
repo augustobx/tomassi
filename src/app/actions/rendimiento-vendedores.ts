@@ -47,12 +47,10 @@ export async function obtenerRendimiento(filtros: {
         const ventasProcesadas = ventas.map(v => {
             const dtoGlobalPorcentaje = v.subtotal > 0 ? (v.descuento_global / v.subtotal) * 100 : 0;
 
-            // Determinar Comisión Base del Vendedor
             const comisionVendedor = v.usuario?.comision_personalizada !== null && v.usuario?.comision_personalizada !== undefined
                 ? (v.usuario.comision_personalizada / 100)
                 : comisionGlobal;
 
-            // Determinar el Límite de Descuento (Prioridad: Cliente -> Vendedor -> Global)
             let limiteAplicable = limiteGlobal;
             if (v.cliente?.limite_desc_cliente !== null && v.cliente?.limite_desc_cliente !== undefined) {
                 limiteAplicable = v.cliente.limite_desc_cliente;
@@ -61,31 +59,39 @@ export async function obtenerRendimiento(filtros: {
             }
 
             let esPenalizado = false;
+            let excedenteGlobal = 0;
 
-            // Verificación 1: Descuento Global vs Límite Aplicable
-            if (dtoGlobalPorcentaje > limiteAplicable) esPenalizado = true;
-
-            // Verificación 2: Descuentos Individuales vs Límites de Categoría
-            for (const det of v.detalles) {
-                const limiteCat = det.producto?.categoria?.limite_desc_categoria;
-                if (limiteCat !== null && limiteCat !== undefined && det.descuento_individual > limiteCat) {
-                    esPenalizado = true;
-                    break; // Si un solo producto viola la regla de su categoría, se penaliza toda la operación
-                }
-                // Si la categoría no tiene límite propio, evaluamos el descuento del producto individual contra el límite general
-                else if ((limiteCat === null || limiteCat === undefined) && det.descuento_individual > limiteAplicable) {
-                    esPenalizado = true;
-                    break;
-                }
+            // Verificación 1: Descuento Global
+            if (dtoGlobalPorcentaje > limiteAplicable) {
+                esPenalizado = true;
+                excedenteGlobal = dtoGlobalPorcentaje - limiteAplicable;
             }
+
+            // Verificación 2: Descuentos Individuales
+            const detallesProcesados = v.detalles.map(det => {
+                const limiteCat = det.producto?.categoria?.limite_desc_categoria;
+                const limiteItem = (limiteCat !== null && limiteCat !== undefined) ? limiteCat : limiteAplicable;
+                const excedeItem = det.descuento_individual > limiteItem;
+                const excedenteItem = excedeItem ? det.descuento_individual - limiteItem : 0;
+
+                if (excedeItem) esPenalizado = true;
+
+                return {
+                    ...det,
+                    limiteAplicado: limiteItem,
+                    excedente: excedenteItem
+                };
+            });
 
             const comisionFinal = esPenalizado ? Math.max(0, comisionVendedor - penalizacionGlobal) : comisionVendedor;
             const comisionMonto = v.total * comisionFinal;
 
             return {
                 ...v,
+                detalles: detallesProcesados,
                 dtoPorcentaje: dtoGlobalPorcentaje,
                 limiteAplicado: limiteAplicable,
+                excedenteGlobal: excedenteGlobal,
                 porcentajeComisionAplicado: (comisionFinal * 100),
                 esPenalizado,
                 comisionGenerada: comisionMonto,
