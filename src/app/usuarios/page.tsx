@@ -3,9 +3,9 @@
 import { useState, useEffect, useTransition } from "react";
 import { toast } from "sonner";
 import {
-    Users, ShieldCheck, UserPlus, KeyRound, Loader2, X, CheckSquare, Square, Trash2, Edit
+    Users, ShieldCheck, UserPlus, KeyRound, Loader2, X, CheckSquare, Square, Trash2, Edit, Ban, CheckCircle
 } from "lucide-react";
-import { getUsuarios, guardarUsuario, eliminarUsuario } from "@/app/actions/usuarios";
+import { getUsuarios, guardarUsuario, eliminarUsuario, toggleActivoUsuario } from "@/app/actions/usuarios";
 import { getSucursales } from "@/app/actions/configuracion";
 
 import { Button } from "@/components/ui/button";
@@ -100,11 +100,27 @@ export default function GestionUsuariosPage() {
     };
 
     const handleDelete = (id: number) => {
-        if (!confirm("¿Seguro que deseás eliminar este usuario y denegarle el acceso?")) return;
+        if (!confirm("Atención: Eliminar físicamente un usuario puede causar errores si tiene ventas a su nombre. Se recomienda 'Suspender'. ¿Seguro que deseás eliminarlo por completo?")) return;
         startTransition(async () => {
             const res = await eliminarUsuario(id);
             if (res.success) {
                 toast.success("Usuario eliminado.");
+                cargarUsuarios();
+            } else {
+                toast.error(res.error);
+            }
+        });
+    };
+
+    // NUEVO: Handler para suspender/activar
+    const handleToggleEstado = (id: number, estadoActual: boolean) => {
+        const accion = estadoActual ? "suspender (no podrá iniciar sesión)" : "reactivar";
+        if (!confirm(`¿Seguro que deseás ${accion} a este usuario?`)) return;
+
+        startTransition(async () => {
+            const res = await toggleActivoUsuario(id, estadoActual);
+            if (res.success) {
+                toast.success(`Cuenta ${estadoActual ? 'suspendida' : 'reactivada'} correctamente.`);
                 cargarUsuarios();
             } else {
                 toast.error(res.error);
@@ -147,13 +163,17 @@ export default function GestionUsuariosPage() {
                     const permisosArray = JSON.parse(u.permisos || "[]");
                     const esAdmin = u.rol === "ADMIN";
                     const esVendedor = u.rol === "VENDEDOR";
+                    const estaInactivo = !u.activo;
 
                     return (
-                        <Card key={u.id} className={`shadow-sm border-2 overflow-hidden ${esAdmin ? 'border-indigo-200 bg-indigo-50/10' : esVendedor ? 'border-amber-200 bg-amber-50/10' : 'border-slate-200 bg-white'}`}>
+                        <Card key={u.id} className={`shadow-sm border-2 overflow-hidden transition-all ${estaInactivo ? 'opacity-70 grayscale-[40%] bg-slate-50' : esAdmin ? 'border-indigo-200 bg-indigo-50/10' : esVendedor ? 'border-amber-200 bg-amber-50/10' : 'border-slate-200 bg-white'}`}>
                             <CardHeader className="p-5 border-b border-slate-100 flex flex-row items-center justify-between bg-slate-50/50">
                                 <div>
                                     <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
                                         <Users className="h-4 w-4 text-slate-400" /> {u.nombre}
+                                        {estaInactivo && (
+                                            <Badge variant="outline" className="text-[9px] text-red-600 border-red-200 bg-red-50 px-1 py-0 h-4 ml-1 font-black">INACTIVO</Badge>
+                                        )}
                                     </CardTitle>
                                     <CardDescription className="font-mono text-xs mt-0.5">@{u.username}</CardDescription>
                                 </div>
@@ -163,7 +183,11 @@ export default function GestionUsuariosPage() {
                             <CardContent className="p-5">
                                 <div className="space-y-3 mb-6">
                                     <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Módulos Habilitados</p>
-                                    {esAdmin ? (
+                                    {estaInactivo ? (
+                                        <div className="text-sm font-medium text-red-600 bg-red-50 p-2 rounded-md border border-red-100 text-center flex items-center justify-center gap-2">
+                                            <Ban className="h-4 w-4" /> CUENTA SUSPENDIDA
+                                        </div>
+                                    ) : esAdmin ? (
                                         <div className="text-sm font-medium text-emerald-600 bg-emerald-50 p-2 rounded-md border border-emerald-100 text-center">
                                             ⭐ Acceso Total (Dueño)
                                         </div>
@@ -184,13 +208,27 @@ export default function GestionUsuariosPage() {
                                 </div>
 
                                 <div className="flex gap-2 pt-4 border-t border-slate-100">
-                                    <Button variant="outline" size="sm" onClick={() => handleAbrirModal(u)} className="flex-1 text-slate-600 font-medium">
+                                    <Button variant="outline" size="sm" onClick={() => handleAbrirModal(u)} className="flex-1 text-slate-600 font-medium h-9">
                                         <Edit className="h-3.5 w-3.5 mr-2" /> Editar
                                     </Button>
                                     {!esAdmin && (
-                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(u.id)} className="text-red-500 hover:bg-red-50 shrink-0 h-9 w-9">
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        <>
+                                            {/* BOTÓN DE SUSPENDER / ACTIVAR */}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleToggleEstado(u.id, u.activo)}
+                                                className={`px-3 h-9 font-bold ${u.activo ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
+                                            >
+                                                {u.activo ? <Ban className="h-4 w-4 mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+                                                {u.activo ? "Suspender" : "Reactivar"}
+                                            </Button>
+
+                                            {/* BOTÓN DE BASURA ORIGINAL */}
+                                            <Button variant="ghost" size="icon" onClick={() => handleDelete(u.id)} className="text-red-400 hover:bg-red-50 hover:text-red-600 shrink-0 h-9 w-9">
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </>
                                     )}
                                 </div>
                             </CardContent>
@@ -250,8 +288,8 @@ export default function GestionUsuariosPage() {
                                                 </SelectContent>
                                             </Select>
                                             <p className="text-[10px] text-slate-500 leading-tight">
-                                                {rolSeleccionado === 'VENDEDOR' 
-                                                    ? 'El vendedor solo accederá a la PWA de pedidos en calle. No verá el sistema ERP.' 
+                                                {rolSeleccionado === 'VENDEDOR'
+                                                    ? 'El vendedor solo accederá a la PWA de pedidos en calle. No verá el sistema ERP.'
                                                     : 'El cajero accede al sistema ERP completo con los permisos que elijas.'}
                                             </p>
                                         </div>

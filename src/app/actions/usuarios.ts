@@ -29,9 +29,9 @@ export async function guardarUsuario(formData: FormData, permisosJSON: string) {
 
         if (id) {
             // ACTUALIZAR USUARIO EXISTENTE
-            const dataUpdate: any = { 
-                nombre, 
-                username, 
+            const dataUpdate: any = {
+                nombre,
+                username,
                 permisos: permisosJSON,
                 sucursalId: sucursalIdStr
             };
@@ -58,7 +58,8 @@ export async function guardarUsuario(formData: FormData, permisosJSON: string) {
                     password,
                     rol,
                     permisos: permisosJSON,
-                    sucursalId: sucursalIdStr
+                    sucursalId: sucursalIdStr,
+                    activo: true // Por defecto nacen activos
                 }
             });
         }
@@ -78,5 +79,19 @@ export async function eliminarUsuario(id: number) {
         return { success: true };
     } catch (error) {
         return { success: false, error: "No se pudo eliminar el usuario." };
+    }
+}
+
+// NUEVO: Función para Suspender/Activar cuenta
+export async function toggleActivoUsuario(id: number, estadoActual: boolean) {
+    try {
+        await prisma.usuario.update({
+            where: { id },
+            data: { activo: !estadoActual } // Invierte el estado actual
+        });
+        revalidatePath("/usuarios");
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: "No se pudo cambiar el estado de la cuenta." };
     }
 }
