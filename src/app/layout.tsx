@@ -205,6 +205,12 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                         <BarChart4 className="h-4 w-4 opacity-70" /> Reportes Maestros
                       </Link>
                     )}
+                    // Insertar debajo del Link de /reportes
+                    {(esAdmin || permisos.includes("REPORTES")) && (
+                      <Link href="/reportes/vendedores" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+                        <Users className="h-4 w-4 opacity-70" /> Comisiones y Rendimiento
+                      </Link>
+                    )}
                     {esAdmin && (
                       <Link href="/importar" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
                         <HardDrive className="h-4 w-4 opacity-70" /> Importar Excel
