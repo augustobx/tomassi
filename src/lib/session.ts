@@ -1,59 +1,96 @@
-import { SignJWT, jwtVerify } from 'jose';
-import { cookies } from 'next/headers';
+import { SignJWT, jwtVerify } from "jose";
+import { cookies } from "next/headers";
 
-// Llave maestra del sistema (En producción debería ir en un archivo .env)
 const secretKey = process.env.SESSION_SECRET || 'tendeco-super-secret-key-2024';
 const key = new TextEncoder().encode(secretKey);
 
-export async function crearToken(payload: any) {
-    return await new SignJWT(payload)
-        .setProtectedHeader({ alg: 'HS256' })
-        .setIssuedAt()
-        .setExpirationTime('12h') // La sesión dura 12 horas (un turno laboral)
-        .sign(key);
+const COOKIE_NAME = 'tendeco_session';
+
+// ========================================================
+// LÓGICA DE TIEMPO: Calcula el próximo cierre a las 18:00
+// ========================================================
+function obtenerProximoCierre() {
+    const now = new Date();
+
+    // Obtenemos la fecha y hora actual específicamente en Argentina.
+    // Esto evita que el servidor (que suele estar en UTC) calcule mal el día.
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        year: 'numeric', month: 'numeric', day: 'numeric',
+        hour: 'numeric', hourCycle: 'h23'
+    }).formatToParts(now);
+
+    const getPart = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0', 10);
+
+    const year = getPart('year');
+    const month = getPart('month') - 1; // En JavaScript los meses empiezan en 0
+    const day = getPart('day');
+    const currentHour = getPart('hour'); // Hora en formato 0-23
+
+    // Construimos la fecha en UTC. 
+    // Las 18:00 en Argentina equivalen a las 21:00 en UTC (UTC-3)
+    const cierreUTC = new Date(Date.UTC(year, month, day, 21, 0, 0, 0));
+
+    // Si la hora actual en Argentina ya es igual o mayor a las 18:00,
+    // significa que el próximo cierre debe ser MAÑANA a las 18:00.
+    if (currentHour >= 18) {
+        cierreUTC.setDate(cierreUTC.getDate() + 1);
+    }
+
+    return cierreUTC;
 }
 
+// ========================================================
+// CONTROL DE SESIÓN
+// ========================================================
 export async function crearSesion(usuario: any) {
-    const expires = new Date(Date.now() + 12 * 60 * 60 * 1000);
+    const expiresAt = obtenerProximoCierre();
 
-    // Guardamos qué permisos tiene este usuario adentro del token
-    const sessionData = {
+    // El JWT requiere el tiempo de expiración en formato UNIX (segundos)
+    const expUnix = Math.floor(expiresAt.getTime() / 1000);
+
+    const payload = {
         id: usuario.id,
         nombre: usuario.nombre,
-        username: usuario.username,
         rol: usuario.rol,
-        sucursalId: usuario.sucursalId, // NUEVO: Contexto de Sucursal
-        permisos: JSON.parse(usuario.permisos || "[]")
+        permisos: JSON.parse(usuario.permisos || "[]"),
+        sucursalId: usuario.sucursalId
     };
 
-    const token = await crearToken(sessionData);
+    // 1. Firmamos el Token con fecha de muerte exacta a las 18:00
+    const sessionToken = await new SignJWT(payload)
+        .setProtectedHeader({ alg: 'HS256' })
+        .setIssuedAt()
+        .setExpirationTime(expUnix)
+        .sign(key);
 
-    // LA CORRECCIÓN ESTÁ ACÁ: Hay que "esperar" a las cookies
+    // 2. Le decimos al navegador que borre la Cookie a las 18:00
     const cookieStore = await cookies();
-
-    cookieStore.set('tendeco_session', token, {
+    cookieStore.set(COOKIE_NAME, sessionToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        expires: expires,
+        expires: expiresAt,
         sameSite: 'lax',
         path: '/',
     });
 }
 
-export async function cerrarSesion() {
-    // ACÁ TAMBIÉN: Esperamos a las cookies para borrarlas
-    const cookieStore = await cookies();
-    cookieStore.set('tendeco_session', '', { expires: new Date(0) });
-}
-
 export async function getSessionUser() {
     const cookieStore = await cookies();
-    const token = cookieStore.get('tendeco_session')?.value;
+    const token = cookieStore.get(COOKIE_NAME)?.value;
+
     if (!token) return null;
+
     try {
         const { payload } = await jwtVerify(token, key);
         return payload;
-    } catch {
+    } catch (error) {
+        // Si ya pasaron las 18:00, la firma falla por expiración y cae directo acá, invalidando la sesión
         return null;
     }
+}
+
+export async function cerrarSesion() {
+    const cookieStore = await cookies();
+    cookieStore.delete(COOKIE_NAME);
 }
