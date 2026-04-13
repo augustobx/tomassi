@@ -84,7 +84,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                   aria-label="Cerrar Sesión"
                 >
                   <LogOut className="h-5 w-5 md:h-4 md:w-4" />
-                  {/* El texto se oculta en móviles muy chicos para ahorrar espacio y dejar solo el ícono */}
                   <span className="hidden md:inline md:ml-2">Salir</span>
                 </button>
               </form>

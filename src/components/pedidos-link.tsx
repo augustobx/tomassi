@@ -1,33 +1,37 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ClipboardList } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 export function PedidosLink() {
     const [pendientes, setPendientes] = useState(0);
     const pathname = usePathname();
+    const router = useRouter();
     const isActive = pathname === "/pedidos";
 
     useEffect(() => {
-        // IMPORTANTE: Tenés que guardar un archivo mp3 en la carpeta /public
-        // Ejemplo: /public/alerta.mp3
+        // Asegurate de que alerta.mp3 esté en la carpeta /public
         const audio = new Audio('/alerta.mp3');
+        audio.load();
 
         const checkPedidos = async () => {
             try {
-                const res = await fetch('/api/pedidos/pendientes');
+                // Fetch fresco, sin caché
+                const res = await fetch('/api/pedidos/pendientes', { cache: 'no-store' });
                 if (!res.ok) return;
 
                 const { count } = await res.json();
 
                 setPendientes((prev) => {
-                    // Si el número de pedidos de la base de datos es MAYOR al que teníamos guardado,
-                    // significa que entró un pedido nuevo. Hacemos sonar la alerta.
-                    // (Evitamos que suene en la primera carga cuando prev es 0)
-                    if (count > prev && prev !== 0) {
-                        audio.play().catch((e) => console.log("Navegador bloqueó autoplay:", e));
+                    // Si la cantidad de pedidos pendientes en la BD es mayor a lo que teníamos
+                    if (count > prev) {
+                        // Reproduce sonido (si el navegador lo permite)
+                        audio.play().catch(e => console.warn("El navegador bloqueó el autoplay del sonido."));
+
+                        // Refresca la tabla automáticamente
+                        router.refresh();
                     }
                     return count;
                 });
@@ -36,14 +40,12 @@ export function PedidosLink() {
             }
         };
 
-        // Consultar inmediatamente al montar
+        // Ejecutar inmediatamente al montar y luego cada 10 segundos
         checkPedidos();
-
-        // Consultar cada 15 segundos (Short Polling)
-        const intervalId = setInterval(checkPedidos, 15000);
+        const intervalId = setInterval(checkPedidos, 10000);
 
         return () => clearInterval(intervalId);
-    }, []);
+    }, [router]);
 
     return (
         <Link
@@ -59,7 +61,7 @@ export function PedidosLink() {
             </div>
 
             {pendientes > 0 && (
-                <span className="flex items-center justify-center bg-red-500 text-white text-[10px] font-black h-5 px-2 rounded-full shadow-sm animate-pulse">
+                <span className="flex items-center justify-center bg-red-500 text-white text-[10px] font-black h-5 px-2 rounded-full shadow-sm animate-bounce">
                     {pendientes}
                 </span>
             )}

@@ -1,21 +1,25 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { buscarClientes, buscarProductos, obtenerListasPrecio, obtenerMarcas, obtenerCategorias } from "@/app/actions/ventas";
 import { registrarPedidoPWA, obtenerPedidosVendedor, accionarPedidoVendedor } from "@/app/actions/pedidos";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
     Trash2, Search, ShoppingCart, User, FileText, Ban, PackageSearch,
-    Plus, Minus, X, ChevronRight, Bookmark, Tag, Percent, History, Edit, CheckCircle2
+    Plus, Minus, X, ChevronRight, Bookmark, Tag, Percent, History, Edit, CheckCircle2, RefreshCw
 } from "lucide-react";
 
 export default function PwaVendedor() {
     // ==========================================
     // ESTADOS MAESTROS Y NAVEGACIÓN
     // ==========================================
+    const router = useRouter();
+    const [isPending, startTransition] = useTransition();
+
     const [listas, setListas] = useState<any[]>([]);
     const [marcas, setMarcas] = useState<any[]>([]);
     const [categorias, setCategorias] = useState<any[]>([]);
@@ -72,6 +76,13 @@ export default function PwaVendedor() {
             setProductosCatalogo(filtrados);
         });
     }, [queryCatalogo, filtroMarca, filtroCategoria, catalogoAbierto]);
+
+    // Función de actualización manual (Refresca rutas del servidor)
+    const handleRefresh = () => {
+        startTransition(() => {
+            router.refresh();
+        });
+    };
 
     // ==========================================
     // LÓGICA DE PRECIOS Y CARRITO
@@ -206,11 +217,21 @@ export default function PwaVendedor() {
             {/* VISTA PRINCIPAL (SI NO ESTÁ ABIERTO NI EL CATÁLOGO NI EL REMITO) */}
             {!vistaRemito && !catalogoAbierto && (
                 <div className="p-4">
-                    {/* Header */}
+                    {/* Header con el nuevo botón de Actualizar */}
                     <div className="flex justify-between items-center mb-6 pt-2">
                         <h1 className="text-2xl font-black text-indigo-950 flex items-center tracking-tight">
                             {tabActiva === 'NUEVO' ? <><ShoppingCart className="mr-2 h-6 w-6 text-indigo-600" /> Toma de Pedido</> : <><History className="mr-2 h-6 w-6 text-indigo-600" /> Mis Pedidos</>}
                         </h1>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleRefresh}
+                            disabled={isPending}
+                            className="bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 font-bold rounded-xl shadow-sm"
+                        >
+                            <RefreshCw className={`h-4 w-4 mr-2 ${isPending ? 'animate-spin' : ''}`} />
+                            {isPending ? '...' : 'Actualizar'}
+                        </Button>
                     </div>
 
                     {/* ================= TAB 1: NUEVO PEDIDO ================= */}
