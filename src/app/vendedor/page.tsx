@@ -3,6 +3,8 @@
 import { useState, useEffect, useTransition } from "react";
 import { buscarClientes, buscarProductos, obtenerListasPrecio, obtenerMarcas, obtenerCategorias } from "@/app/actions/ventas";
 import { registrarPedidoPWA, obtenerPedidosVendedor, accionarPedidoVendedor } from "@/app/actions/pedidos";
+import { registrarClientePWA } from "@/app/actions/clientes";
+import { guardarOffline, obtenerTodosOffline, eliminarOffline, STORE_PEDIDOS, STORE_CLIENTES } from "@/lib/offline-db";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,7 +12,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
     Trash2, Search, ShoppingCart, User, FileText, Ban, PackageSearch,
-    Plus, Minus, X, ChevronRight, Bookmark, Tag, Percent, History, Edit, CheckCircle2, RefreshCw
+    Plus, Minus, X, ChevronRight, Bookmark, Tag, Percent, History, Edit,
+    CheckCircle2, RefreshCw, UserPlus, CloudOff, Wifi
 } from "lucide-react";
 
 export default function PwaVendedor() {
@@ -19,6 +22,8 @@ export default function PwaVendedor() {
     // ==========================================
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
+    const [isOnline, setIsOnline] = useState(true);
+    const [syncing, setSyncing] = useState(false);
 
     const [listas, setListas] = useState<any[]>([]);
     const [marcas, setMarcas] = useState<any[]>([]);
@@ -29,6 +34,7 @@ export default function PwaVendedor() {
     const [tabActiva, setTabActiva] = useState<'NUEVO' | 'HISTORIAL'>('NUEVO');
     const [vistaRemito, setVistaRemito] = useState(false);
     const [catalogoAbierto, setCatalogoAbierto] = useState(false);
+    const [modalCliente, setModalCliente] = useState(false);
 
     // ==========================================
     // ESTADOS DEL PEDIDO ACTUAL
@@ -37,10 +43,6 @@ export default function PwaVendedor() {
     const [selectedListaId, setSelectedListaId] = useState<number>(1);
     const [notas, setNotas] = useState("");
     const [carrito, setCarrito] = useState<any[]>([]);
-
-    // Pagos
-    const [metodoPago, setMetodoPago] = useState<'EFECTIVO' | 'CUENTA_CORRIENTE'>('EFECTIVO');
-    const [montoAbonado, setMontoAbonado] = useState<number | "">("");
 
     // Buscadores
     const [queryCliente, setQueryCliente] = useState("");
@@ -53,16 +55,63 @@ export default function PwaVendedor() {
     const depositoId = 1;
 
     // ==========================================
-    // EFECTOS (CARGA DE DATOS)
+    // EFECTOS (CONEXIÓN Y CARGA)
     // ==========================================
     useEffect(() => {
+        // Monitoreo de conexión
+        setIsOnline(navigator.onLine);
+        const handleOnline = () => { setIsOnline(true); intentarSincronizar(); };
+        const handleOffline = () => setIsOnline(false);
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
         obtenerListasPrecio().then(setListas);
         obtenerMarcas().then(setMarcas);
         obtenerCategorias().then(setCategorias);
         cargarHistorial();
+        intentarSincronizar();
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
     }, []);
 
     const cargarHistorial = () => obtenerPedidosVendedor().then(setPedidosHistorial);
+
+    // Lógica de sincronización automática
+    const intentarSincronizar = async () => {
+        if (!navigator.onLine || syncing) return;
+        setSyncing(true);
+
+        try {
+            // 1. Sincronizar Clientes Nuevos
+            const clientesPending = await obtenerTodosOffline(STORE_CLIENTES);
+            for (const c of clientesPending) {
+                const res = await registrarClientePWA(c);
+                if (res.success) await eliminarOffline(STORE_CLIENTES, c.id);
+            }
+
+            // 2. Sincronizar Pedidos
+            const pedidosPending = await obtenerTodosOffline(STORE_PEDIDOS);
+            if (pedidosPending.length > 0) toast.info(`Sincronizando ${pedidosPending.length} pedidos pendientes...`);
+
+            for (const p of pedidosPending) {
+                const res = await registrarPedidoPWA(p);
+                if (res.success) await eliminarOffline(STORE_PEDIDOS, p.id);
+            }
+
+            if (pedidosPending.length > 0) {
+                toast.success("Sincronización finalizada");
+                cargarHistorial();
+            }
+        } catch (e) {
+            console.error("Fallo en sincronización:", e);
+        } finally {
+            setSyncing(false);
+        }
+    };
 
     useEffect(() => {
         if (queryCliente.length > 2) buscarClientes(queryCliente).then(setClientesRes);
@@ -77,10 +126,11 @@ export default function PwaVendedor() {
         });
     }, [queryCatalogo, filtroMarca, filtroCategoria, catalogoAbierto]);
 
-    // Función de actualización manual (Refresca rutas del servidor)
+    // Función de actualización manual
     const handleRefresh = () => {
         startTransition(() => {
             router.refresh();
+            intentarSincronizar();
         });
     };
 
@@ -155,14 +205,13 @@ export default function PwaVendedor() {
     const total = carrito.reduce((acc, item) => acc + item.subtotal, 0);
 
     // ==========================================
-    // ACCIONES HACIA LA BASE DE DATOS
+    // ACCIONES DE BASE DE DATOS (CON MODO OFFLINE)
     // ==========================================
     const confirmarPedido = async () => {
         if (!cliente) return toast.error("Seleccioná un cliente");
         if (carrito.length === 0) return toast.error("Carrito vacío");
 
-        const toastId = toast.loading("Enviando pedido a administración...");
-        const res = await registrarPedidoPWA({
+        const pedidoData = {
             clienteId: cliente.id,
             depositoId: depositoId,
             listaPrecioId: selectedListaId,
@@ -170,37 +219,77 @@ export default function PwaVendedor() {
             total: total,
             notas: notas,
             carrito: carrito,
-            metodoPago: metodoPago,
-            montoAbonado: metodoPago === 'EFECTIVO' ? (Number(montoAbonado) || total) : total
-        });
+            metodoPago: 'CUENTA_CORRIENTE', // Forzado a Cta Cte
+            montoAbonado: total
+        };
+
+        // Si no hay internet, guardamos localmente
+        if (!isOnline) {
+            await guardarOffline(STORE_PEDIDOS, pedidoData);
+            toast.warning("Sin conexión. El pedido se enviará automáticamente al recuperar señal.", { duration: 5000 });
+            finalizarFlujoVenta();
+            return;
+        }
+
+        const toastId = toast.loading("Enviando pedido a administración...");
+        const res = await registrarPedidoPWA(pedidoData);
 
         if (res.success) {
             toast.success("¡Pedido enviado correctamente!", { id: toastId });
-            setCarrito([]);
-            setCliente(null);
-            setNotas("");
-            setMontoAbonado("");
-            setVistaRemito(false);
-            cargarHistorial();
-            setTabActiva('HISTORIAL');
+            finalizarFlujoVenta();
         } else {
             toast.error(res.error, { id: toastId });
         }
     };
 
+    const finalizarFlujoVenta = () => {
+        setCarrito([]);
+        setCliente(null);
+        setNotas("");
+        setVistaRemito(false);
+        cargarHistorial();
+        setTabActiva('HISTORIAL');
+    };
+
+    const handleNuevoCliente = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        const data = {
+            nombre: f.get("nombre") as string,
+            cuit: f.get("cuit") as string,
+            direccion: f.get("direccion") as string,
+            telefono: f.get("telefono") as string,
+        };
+
+        if (!isOnline) {
+            await guardarOffline(STORE_CLIENTES, data);
+            toast.warning("Sin conexión. Cliente guardado para sincronización.");
+            setModalCliente(false);
+            return;
+        }
+
+        const res = await registrarClientePWA(data);
+        if (res.success) {
+            toast.success("Cliente creado correctamente");
+            setCliente(res.cliente);
+            setModalCliente(false);
+        } else {
+            toast.error(res.error);
+        }
+    };
+
     const manejarAccionHistorial = async (pedido: any, accion: 'CANCELAR' | 'EDITAR') => {
-        if (!confirm(`¿Seguro que querés ${accion} este pedido? Se devolverá el stock.`)) return;
+        if (!isOnline) return toast.error("Debés estar conectado para cancelar o editar pedidos pasados.");
+        if (!confirm(`¿Seguro que querés ${accion} este pedido?`)) return;
 
         const toastId = toast.loading(`Procesando...`);
         const res = await accionarPedidoVendedor(pedido.id, accion);
 
         if (res.success) {
-            toast.success(`Pedido ${accion === 'EDITAR' ? 'listo para editar' : 'cancelado'}`, { id: toastId });
+            toast.success(`Acción realizada`, { id: toastId });
             cargarHistorial();
-
             if (accion === 'EDITAR') {
                 setCliente(pedido.cliente);
-                toast.info("Por favor, volvé a seleccionar el cliente para validar la lista de precios.");
                 setTabActiva('NUEVO');
             }
         } else {
@@ -214,30 +303,36 @@ export default function PwaVendedor() {
     return (
         <div className="min-h-screen bg-zinc-50 pb-24 text-zinc-900 overflow-x-hidden font-sans">
 
-            {/* VISTA PRINCIPAL (SI NO ESTÁ ABIERTO NI EL CATÁLOGO NI EL REMITO) */}
+            {/* INDICADOR DE RED */}
+            <div className={`text-[10px] font-black text-center py-1 transition-colors ${isOnline ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
+                {isOnline ? (
+                    <span className="flex items-center justify-center gap-1"><Wifi className="w-3 h-3" /> CONECTADO</span>
+                ) : (
+                    <span className="flex items-center justify-center gap-1 animate-pulse"><CloudOff className="w-3 h-3" /> MODO OFFLINE (LOS DATOS SE GUARDAN EN EL EQUIPO)</span>
+                )}
+            </div>
+
             {!vistaRemito && !catalogoAbierto && (
                 <div className="p-4">
-                    {/* Header con el nuevo botón de Actualizar */}
                     <div className="flex justify-between items-center mb-6 pt-2">
                         <h1 className="text-2xl font-black text-indigo-950 flex items-center tracking-tight">
                             {tabActiva === 'NUEVO' ? <><ShoppingCart className="mr-2 h-6 w-6 text-indigo-600" /> Toma de Pedido</> : <><History className="mr-2 h-6 w-6 text-indigo-600" /> Mis Pedidos</>}
                         </h1>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleRefresh}
-                            disabled={isPending}
-                            className="bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 font-bold rounded-xl shadow-sm"
-                        >
-                            <RefreshCw className={`h-4 w-4 mr-2 ${isPending ? 'animate-spin' : ''}`} />
-                            {isPending ? '...' : 'Actualizar'}
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isPending} className="bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 font-bold rounded-xl shadow-sm">
+                                <RefreshCw className={`h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
+                            </Button>
+                            {tabActiva === 'NUEVO' && (
+                                <Button onClick={() => setModalCliente(true)} className="bg-indigo-600 text-white font-bold rounded-xl shadow-sm h-10 px-4">
+                                    <UserPlus className="h-4 w-4 mr-2" /> Nuevo Cliente
+                                </Button>
+                            )}
+                        </div>
                     </div>
 
-                    {/* ================= TAB 1: NUEVO PEDIDO ================= */}
                     {tabActiva === 'NUEVO' && (
                         <div className="animate-in fade-in duration-300">
-                            {/* CLIENTE */}
+                            {/* BÚSQUEDA / SELECCIÓN CLIENTE */}
                             {!cliente ? (
                                 <div className="bg-white p-5 rounded-3xl shadow-sm border border-zinc-200 mb-4">
                                     <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3 flex items-center"><User className="w-3 h-3 mr-1" /> Selección de Cliente</label>
@@ -273,7 +368,7 @@ export default function PwaVendedor() {
                                 </div>
                             )}
 
-                            {/* BOTÓN CATÁLOGO */}
+                            {/* CATÁLOGO BUTTON */}
                             {cliente && (
                                 <Button onClick={() => setCatalogoAbierto(true)} className="w-full h-20 text-xl font-black bg-white border-2 border-indigo-100 text-indigo-600 rounded-3xl shadow-sm hover:bg-indigo-50 flex justify-between px-8 mb-6">
                                     <span className="flex items-center"><PackageSearch className="w-7 h-7 mr-3" /> CATÁLOGO</span>
@@ -281,12 +376,12 @@ export default function PwaVendedor() {
                                 </Button>
                             )}
 
-                            {/* CARRITO Y NOTAS */}
+                            {/* CARRITO RESUMEN */}
                             {carrito.length > 0 && (
                                 <div className="space-y-4 mb-24">
                                     <div className="flex justify-between px-2 items-end">
-                                        <p className="text-xs font-black text-zinc-400 uppercase tracking-widest">Resumen</p>
-                                        <p className="text-xs font-bold text-red-500 cursor-pointer" onClick={() => setCarrito([])}>Vaciar todo</p>
+                                        <p className="text-xs font-black text-zinc-400 uppercase tracking-widest">Artículos Seleccionados</p>
+                                        <p className="text-xs font-bold text-red-500 cursor-pointer" onClick={() => setCarrito([])}>Vaciar Carrito</p>
                                     </div>
                                     {carrito.map((item, i) => (
                                         <Card key={i} className="border-0 shadow-sm rounded-3xl overflow-hidden">
@@ -310,15 +405,15 @@ export default function PwaVendedor() {
                                         </Card>
                                     ))}
 
-                                    <textarea value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Observaciones para la oficina..." className="w-full p-4 border border-zinc-200 rounded-3xl bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[100px] shadow-sm mt-4" />
+                                    <textarea value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Notas internas para administración..." className="w-full p-4 border border-zinc-200 rounded-3xl bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[100px] shadow-sm mt-4" />
                                 </div>
                             )}
 
-                            {/* BOTÓN VER PEDIDO (PREVIO A ENVIAR) */}
+                            {/* BOTÓN FINALIZAR (REMITO) */}
                             {carrito.length > 0 && (
                                 <div className="fixed bottom-[80px] left-0 right-0 p-4 bg-gradient-to-t from-zinc-50 via-zinc-50 to-transparent z-30">
                                     <Button onClick={() => setVistaRemito(true)} className="w-full bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-200 rounded-2xl h-16 font-black text-lg flex justify-between px-6">
-                                        <span>VER PEDIDO</span>
+                                        <span>REVISAR PEDIDO</span>
                                         <span className="bg-indigo-800/50 px-3 py-1 rounded-xl">${total.toFixed(2)}</span>
                                     </Button>
                                 </div>
@@ -326,12 +421,12 @@ export default function PwaVendedor() {
                         </div>
                     )}
 
-                    {/* ================= TAB 2: HISTORIAL ================= */}
+                    {/* HISTORIAL VISTA */}
                     {tabActiva === 'HISTORIAL' && (
                         <div className="animate-in fade-in duration-300 pb-24">
                             <div className="relative mb-4">
                                 <Search className="absolute left-4 top-4 h-5 w-5 text-zinc-400" />
-                                <Input placeholder="Filtrar por nombre de cliente..." className="pl-12 h-14 bg-white border-zinc-200 rounded-2xl text-base shadow-sm" value={filtroHistorial} onChange={(e) => setFiltroHistorial(e.target.value)} />
+                                <Input placeholder="Buscar cliente en historial..." className="pl-12 h-14 bg-white border-zinc-200 rounded-2xl text-base shadow-sm" value={filtroHistorial} onChange={(e) => setFiltroHistorial(e.target.value)} />
                             </div>
 
                             <div className="space-y-4">
@@ -361,14 +456,13 @@ export default function PwaVendedor() {
                                         </CardContent>
                                     </Card>
                                 ))}
-                                {pedidosHistorial.length === 0 && <p className="text-center text-zinc-400 p-8 font-medium">No hay pedidos registrados.</p>}
                             </div>
                         </div>
                     )}
                 </div>
             )}
 
-            {/* ================= BARRA DE NAVEGACIÓN INFERIOR FIJA ================= */}
+            {/* NAVBAR INFERIOR */}
             {!vistaRemito && !catalogoAbierto && (
                 <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] pb-safe z-40 flex">
                     <button onClick={() => setTabActiva('NUEVO')} className={`flex-1 flex flex-col items-center py-3 ${tabActiva === 'NUEVO' ? 'text-indigo-600' : 'text-zinc-400'}`}>
@@ -382,17 +476,17 @@ export default function PwaVendedor() {
                 </div>
             )}
 
-            {/* ================= DRAWER CATÁLOGO COMPLETO ================= */}
+            {/* DRAWER CATÁLOGO COMPLETO */}
             {catalogoAbierto && (
                 <div className="fixed inset-0 z-50 bg-white flex flex-col animate-in slide-in-from-bottom duration-300">
                     <div className="bg-white p-5 border-b border-zinc-100 shrink-0">
                         <div className="flex justify-between items-center mb-5">
-                            <h2 className="font-black text-2xl text-zinc-900">Catálogo</h2>
+                            <h2 className="font-black text-2xl text-zinc-900">Catálogo de Productos</h2>
                             <Button variant="ghost" size="icon" onClick={() => setCatalogoAbierto(false)} className="bg-zinc-100 rounded-2xl h-12 w-12"><X className="h-6 w-6" /></Button>
                         </div>
                         <div className="relative mb-5">
                             <Search className="absolute left-4 top-4 h-5 w-5 text-zinc-300" />
-                            <Input placeholder="Buscar marca o producto..." className="pl-12 h-14 bg-zinc-50 border-transparent rounded-2xl text-lg font-medium" value={queryCatalogo} onChange={(e) => setQueryCatalogo(e.target.value)} />
+                            <Input placeholder="Buscar por nombre o marca..." className="pl-12 h-14 bg-zinc-50 border-transparent rounded-2xl text-lg font-medium" value={queryCatalogo} onChange={(e) => setQueryCatalogo(e.target.value)} />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="relative"><Bookmark className="absolute left-3 top-3 h-3 w-3 text-indigo-400" /><select className="w-full h-10 pl-8 rounded-xl bg-zinc-50 text-[11px] font-bold outline-none" value={filtroMarca} onChange={(e) => setFiltroMarca(e.target.value)}><option value="TODAS">TODAS LAS MARCAS</option>{marcas.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}</select></div>
@@ -437,20 +531,19 @@ export default function PwaVendedor() {
                         })}
                     </div>
                     <div className="p-5 border-t bg-white pb-safe">
-                        <Button onClick={() => setCatalogoAbierto(false)} className="w-full h-16 bg-zinc-900 text-white font-black rounded-2xl text-lg shadow-xl">LISTO ({carrito.reduce((acc, i) => acc + i.cantidad, 0)} UNIDADES)</Button>
+                        <Button onClick={() => setCatalogoAbierto(false)} className="w-full h-16 bg-zinc-900 text-white font-black rounded-2xl text-lg shadow-xl">CERRAR CATÁLOGO ({carrito.reduce((acc, i) => acc + i.cantidad, 0)} items)</Button>
                     </div>
                 </div>
             )}
 
-            {/* ================= DRAWER REMITO Y PAGOS ================= */}
+            {/* DRAWER REMITO (FORZADO CTA CTE) */}
             {vistaRemito && (
                 <div className="fixed inset-0 z-50 bg-zinc-900 flex flex-col p-4 pt-safe animate-in zoom-in-95 duration-300">
                     <div className="flex-1 bg-white rounded-3xl p-6 overflow-y-auto relative shadow-2xl">
-
                         <Button variant="ghost" size="icon" onClick={() => setVistaRemito(false)} className="absolute top-4 right-4 bg-zinc-100 rounded-full h-10 w-10 text-zinc-500"><X className="h-5 w-5" /></Button>
 
                         <div className="text-center border-b border-dashed border-zinc-300 pb-5 mb-5 mt-2">
-                            <h2 className="font-black text-2xl text-zinc-900 tracking-tight">REMITO DE PEDIDO</h2>
+                            <h2 className="font-black text-2xl text-zinc-900 tracking-tight">PEDIDO DE VENTA</h2>
                             <p className="text-xs font-bold text-zinc-400 uppercase mt-2">{cliente.nombre_razon_social}</p>
                             <p className="text-[10px] text-zinc-400">CUIT: {cliente.dni_cuit || 'S/D'}</p>
                         </div>
@@ -460,78 +553,31 @@ export default function PwaVendedor() {
                                 <div key={i} className="flex justify-between items-start">
                                     <div className="max-w-[70%]">
                                         <p className="font-bold text-xs text-zinc-800 leading-tight">{item.cantidad}x {item.nombre}</p>
-                                        {item.descuento_individual > 0 && <p className="text-[9px] font-black text-emerald-600">Dto aplicado: {item.descuento_individual}%</p>}
+                                        {item.descuento_individual > 0 && <p className="text-[9px] font-black text-emerald-600">Dto: {item.descuento_individual}%</p>}
                                     </div>
                                     <p className="font-black text-sm text-zinc-900">${item.subtotal.toFixed(2)}</p>
                                 </div>
                             ))}
                         </div>
 
-                        <div className="border-t border-dashed border-zinc-300 pt-5 space-y-2">
-                            <div className="flex justify-between items-center text-zinc-500 text-xs font-bold"><span>Total Ítems</span><span>{carrito.reduce((acc, i) => acc + i.cantidad, 0)} unidades</span></div>
-                            <div className="flex justify-between items-center mt-2 pt-2 border-t border-zinc-100 mb-4">
-                                <span className="font-black text-lg text-zinc-900">TOTAL FINAL</span>
+                        <div className="border-t border-dashed border-zinc-300 pt-5 mb-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <span className="font-black text-zinc-400">TOTAL A COBRAR</span>
                                 <span className="font-black text-2xl text-indigo-600">${total.toFixed(2)}</span>
                             </div>
-                        </div>
 
-                        {/* SECCIÓN DE PAGOS */}
-                        <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-200">
-                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Método de Pago</p>
-                            <div className="grid grid-cols-2 gap-2 mb-4">
-                                <Button
-                                    variant={metodoPago === 'EFECTIVO' ? 'default' : 'outline'}
-                                    onClick={() => setMetodoPago('EFECTIVO')}
-                                    className={`h-12 font-bold rounded-xl ${metodoPago === 'EFECTIVO' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-zinc-500 border-zinc-200'}`}
-                                >
-                                    EFECTIVO
-                                </Button>
-                                <Button
-                                    variant={metodoPago === 'CUENTA_CORRIENTE' ? 'default' : 'outline'}
-                                    onClick={() => setMetodoPago('CUENTA_CORRIENTE')}
-                                    className={`h-12 font-bold rounded-xl ${metodoPago === 'CUENTA_CORRIENTE' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-zinc-500 border-zinc-200'}`}
-                                >
-                                    CTA. CTE
-                                </Button>
+                            {/* INDICADOR DE PAGO FORZADO */}
+                            <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 text-center">
+                                <Badge className="bg-indigo-600 text-white mb-2 px-3 py-1">PAGO: CUENTA CORRIENTE</Badge>
+                                <p className="text-[10px] text-indigo-700 font-bold leading-tight">
+                                    El pedido se cargará automáticamente al saldo del cliente en el ERP principal.
+                                </p>
                             </div>
-
-                            {metodoPago === 'EFECTIVO' && (
-                                <div className="space-y-3 animate-in fade-in duration-200">
-                                    <div className="flex justify-between items-center bg-white p-2 rounded-xl border border-zinc-200">
-                                        <span className="text-xs font-bold text-zinc-600 pl-2">Abona con:</span>
-                                        <div className="relative w-[120px]">
-                                            <span className="absolute left-3 top-2.5 text-zinc-400 font-bold">$</span>
-                                            <Input
-                                                type="number"
-                                                className="pl-7 h-10 font-black text-right bg-zinc-50 border-none"
-                                                value={montoAbonado}
-                                                onChange={(e) => setMontoAbonado(Number(e.target.value))}
-                                                placeholder={total.toFixed(2)}
-                                            />
-                                        </div>
-                                    </div>
-                                    {Number(montoAbonado) > total && (
-                                        <div className="flex justify-between items-center pt-2 px-2">
-                                            <span className="text-xs font-black text-emerald-600 uppercase tracking-wider">VUELTO:</span>
-                                            <span className="font-black text-xl text-emerald-600">${(Number(montoAbonado) - total).toFixed(2)}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {metodoPago === 'CUENTA_CORRIENTE' && (
-                                <div className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 animate-in fade-in duration-200">
-                                    <p className="text-xs text-indigo-700 font-semibold text-center">
-                                        El importe total (${total.toFixed(2)}) se cargará en la cuenta del cliente.
-                                    </p>
-                                </div>
-                            )}
                         </div>
 
                         {notas && (
-                            <div className="mt-4 bg-amber-50 p-3 rounded-xl border border-amber-100">
-                                <p className="text-[9px] font-black text-amber-600 uppercase mb-1">Notas al administrador:</p>
-                                <p className="text-xs font-medium text-amber-900 italic">"{notas}"</p>
+                            <div className="mt-4 bg-amber-50 p-3 rounded-xl border border-amber-100 italic text-xs text-amber-900">
+                                <b>Notas:</b> "{notas}"
                             </div>
                         )}
                     </div>
@@ -541,6 +587,39 @@ export default function PwaVendedor() {
                             <CheckCircle2 className="mr-2 h-6 w-6" /> CONFIRMAR Y ENVIAR
                         </Button>
                     </div>
+                </div>
+            )}
+
+            {/* MODAL NUEVO CLIENTE (STYLING TUNDECO) */}
+            {modalCliente && (
+                <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                    <Card className="w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl">
+                        <div className="bg-indigo-600 p-6 text-white flex justify-between items-center">
+                            <h3 className="font-black text-xl">Alta de Cliente</h3>
+                            <Button variant="ghost" size="icon" onClick={() => setModalCliente(false)} className="text-white hover:bg-white/20 rounded-full"><X /></Button>
+                        </div>
+                        <form onSubmit={handleNuevoCliente} className="p-6 space-y-4 bg-white">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase">Nombre Completo</label>
+                                <Input name="nombre" placeholder="Razón Social / Nombre" required className="h-12 rounded-xl bg-zinc-50" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase">CUIT / DNI</label>
+                                <Input name="cuit" placeholder="Sin guiones" required className="h-12 rounded-xl bg-zinc-50" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase">Dirección (Opcional)</label>
+                                <Input name="direccion" placeholder="Calle y número" className="h-12 rounded-xl bg-zinc-50" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase">Teléfono</label>
+                                <Input name="telefono" placeholder="WhatsApp / Local" className="h-12 rounded-xl bg-zinc-50" />
+                            </div>
+                            <Button type="submit" className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl mt-4 shadow-lg">
+                                CREAR CLIENTE
+                            </Button>
+                        </form>
+                    </Card>
                 </div>
             )}
         </div>

@@ -95,11 +95,11 @@ export async function getHistorialCliente(clienteId: number) {
             ...movimientos.map(m => {
                 const esDevolucion = m.notas?.toLowerCase().includes('nota de cr') || m.notas?.toLowerCase().includes('devoluc');
                 const esUsoSaldo = m.metodo_pago === 'SALDO_A_FAVOR' && m.tipo === 'CARGO';
-                
+
                 let titulo = `Recibo de Pago (${m.metodo_pago.replace('_', ' ')})`;
                 if (esDevolucion) titulo = "NOTA DE CRÉDITO / DEVOLUCIÓN A FAVOR";
                 if (esUsoSaldo) titulo = "USO DE SALDO A FAVOR";
-                
+
                 return {
                     id_unico: `m_${m.id}`,
                     id_real: m.id,
@@ -202,7 +202,7 @@ export async function getResumenFinancieroCliente(id: number) {
         const totalAbonos = movimientos.filter(m => m.tipo === 'ABONO').reduce((acc, m) => acc + m.monto, 0);
 
         const balanceNeto = totalAbonos - totalCargos;
-        
+
         // Si el cliente pagó de más, el balanceNeto será positivo.
         // Si hay una discrepancia entre ventas no saldadas y movimientos (por el pasado sin CARGOS),
         // damos prioridad a ventasDeuda para deuda exigible, y al balance positivo para saldo a favor.
@@ -269,7 +269,7 @@ export async function cobrarCuentaCorriente(clienteId: number, pagos: { metodo_p
 
                 const aPagar = Math.min(v.saldo_pendiente, restanteAbono);
                 restanteAbono -= aPagar;
-                
+
                 const nuevoSaldo = v.saldo_pendiente - aPagar;
 
                 await tx.venta.update({
@@ -285,9 +285,32 @@ export async function cobrarCuentaCorriente(clienteId: number, pagos: { metodo_p
         revalidatePath("/clientes");
         revalidatePath("/ventas");
         revalidatePath("/caja");
-        
+
         return { success: true };
     } catch (e: any) {
         return { success: false, error: e.message || "Error al cobrar cuenta corriente" };
+    }
+}
+
+
+// src/app/actions/clientes.ts (Agregar al final)
+export async function registrarClientePWA(data: { nombre: string, cuit: string, direccion?: string, telefono?: string }) {
+    try {
+        const nuevo = await prisma.cliente.create({
+            data: {
+                nombre_razon_social: data.nombre,
+                dni_cuit: data.cuit,
+                direccion: data.direccion,
+                telefono: data.telefono,
+                condicion_iva: "CONSUMIDOR_FINAL",
+                comprobante_default: "COMPROBANTE_X",
+                lista_default_id: 1 // Por defecto a la lista general
+            }
+        });
+        revalidatePath("/clientes");
+        return { success: true, cliente: nuevo };
+    } catch (error: any) {
+        if (error.code === 'P2002') return { success: false, error: "El CUIT/DNI ya existe." };
+        return { success: false, error: "Error al crear cliente." };
     }
 }
