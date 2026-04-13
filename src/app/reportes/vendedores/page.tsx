@@ -39,10 +39,11 @@ export default function RendimientoVendedoresPage() {
         startTransition(async () => {
             const res = await obtenerRendimiento({ fechaDesde, fechaHasta, vendedorId, clienteId });
             if (res.success) {
-                setVentas(res.ventas);
-                setRecibos(res.recibos);
-                setVendedores(res.vendedores);
-                setClientes(res.clientes);
+                // SOLUCIÓN: Agregamos || [] para que TypeScript confíe en que nunca será undefined
+                setVentas(res.ventas || []);
+                setRecibos(res.recibos || []);
+                setVendedores(res.vendedores || []);
+                setClientes(res.clientes || []);
             }
         });
     };
