@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import Link from "next/link";
+import { PedidosLink } from "@/components/pedidos-link";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -140,9 +141,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                       </Link>
                     )}
                     {(esAdmin || permisos.includes("VENTAS")) && (
-                      <Link href="/pedidos" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors">
-                        <ClipboardList className="h-4 w-4 opacity-70" /> Pedidos Vendedores
-                      </Link>
+                      <PedidosLink />
                     )}
                     {(esAdmin || permisos.includes("CAJA")) && (
                       <Link href="/caja" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
