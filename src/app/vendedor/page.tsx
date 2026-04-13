@@ -15,6 +15,7 @@ import {
     Plus, Minus, X, ChevronRight, Bookmark, Tag, Percent, History, Edit,
     CheckCircle2, RefreshCw, UserPlus, CloudOff, Wifi
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 export default function PwaVendedor() {
     // ==========================================
