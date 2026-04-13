@@ -46,10 +46,13 @@ model Categoria {
   marcaId            Int?
   marca              Marca?     @relation(fields: [marcaId], references: [id])
   aumento_porcentaje Float      @default(0)
+  
+  // NUEVO: Límite de descuento máximo permitido para artículos de esta categoría
+  limite_desc_categoria Float?
+
   productos          Producto[]
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
-  limite_desc_categoria   Float?
 }
 
 // ==========================================
@@ -124,9 +127,8 @@ model ProductoListaPrecio {
   productoId           Int
   listaPrecioId        Int
   margen_personalizado Float?
-
-  producto    Producto    @relation(fields: [productoId], references: [id], onDelete: Cascade)
-  listaPrecio ListaPrecio @relation(fields: [listaPrecioId], references: [id], onDelete: Cascade)
+  producto             Producto    @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  listaPrecio          ListaPrecio @relation(fields: [listaPrecioId], references: [id], onDelete: Cascade)
 
   @@id([productoId, listaPrecioId])
 }
@@ -143,12 +145,14 @@ model Cliente {
   direccion           String?
   telefono            String?
   comentarios         String? @db.Text
-  limite_desc_cliente     Float?
 
   comprobante_default String @default("COMPROBANTE_X")
 
   limite_credito   Float?
   dias_aviso_deuda Int    @default(30)
+  
+  // NUEVO: Límite de descuento tolerado para este cliente en particular
+  limite_desc_cliente Float?
 
   lista_default_id  Int?
   lista_default     ListaPrecio?         @relation("ClienteListaDefault", fields: [lista_default_id], references: [id])
@@ -201,20 +205,18 @@ model Venta {
   estado_pago          EstadoPago @default(PAGADO)
   saldo_pendiente      Float      @default(0)
   fecha_vencimiento_cc DateTime?
-
-  requiere_envio   Boolean @default(false)
-  direccion_envio  String?
-  notas_venta      String? @db.Text
-  comentario_venta String? @db.Text
+  requiere_envio       Boolean    @default(false)
+  direccion_envio      String?
+  notas_venta          String?    @db.Text
+  comentario_venta     String?    @db.Text
 
   subtotal         Float
   descuento_global Float @default(0)
   total            Float
 
   presupuestoOrigenId Int?
-
-  sucursalId Int?
-  sucursal   Sucursal? @relation(fields: [sucursalId], references: [id])
+  sucursalId          Int?
+  sucursal            Sucursal? @relation(fields: [sucursalId], references: [id])
 
   depositoOrigenId Int?
   depositoOrigen   Deposito? @relation("VentaDeposito", fields: [depositoOrigenId], references: [id])
@@ -383,7 +385,6 @@ model CajaDiaria {
   id             Int       @id @default(autoincrement())
   fecha_apertura DateTime  @default(now())
   fecha_cierre   DateTime?
-
   saldo_inicial  Float
   saldo_esperado Float?
   saldo_real     Float?
@@ -448,9 +449,11 @@ model EmpresaConfig {
   telefono             String  @default("11-0000-0000")
   redes_sociales       String  @default("@tendeco.pinturas")
   logo_url             String?
-  comision_base_global    Float @default(5)
-  penalizacion_global     Float @default(2)
-  limite_desc_global      Float @default(10)
+  
+  // NUEVO: Variables globales por defecto
+  comision_base_global Float   @default(5)
+  penalizacion_global  Float   @default(2)
+  limite_desc_global   Float   @default(10)
 }
 
 // ==========================================
@@ -466,8 +469,10 @@ model Usuario {
   permisos String   @default("[\"VENTAS\", \"CLIENTES\"]")
   activo   Boolean  @default(true)
   creadoEn DateTime @default(now())
-  comision_personalizada  Float?
-  limite_desc_vendedor    Float?
+
+  // NUEVO: Reglas específicas para este vendedor
+  comision_personalizada Float?
+  limite_desc_vendedor   Float?
 
   sucursalId        Int?
   sucursal          Sucursal?                   @relation(fields: [sucursalId], references: [id])
@@ -553,12 +558,11 @@ model MovimientoStock {
   cantidad Float
   tipo     TipoMovimientoStock
   motivo   String?
-
   usuarioId Int?
   usuario   Usuario? @relation(fields: [usuarioId], references: [id])
 
-  ventaId Int? // Si proviene de una venta
-  venta   Venta? @relation(fields: [ventaId], references: [id])
+  ventaId Int?
+  venta   Venta?   @relation(fields: [ventaId], references: [id])
 
   fecha DateTime @default(now())
 }
@@ -603,9 +607,9 @@ model Pedido {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  metodo_pago      String         @default("EFECTIVO") // "EFECTIVO" o "CUENTA_CORRIENTE"
-  monto_abonado    Float?         // Para registrar con cuánto pagó
-  ventaId          Int?           // ID de la Venta generada al facturar
+  metodo_pago      String  @default("EFECTIVO")
+  monto_abonado    Float?
+  ventaId          Int?
 }
 
 model DetallePedido {
