@@ -73,7 +73,22 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           // =========================================================
           // VISTA VENDEDOR PWA (Sin Sidebar — Solo la PWA)
           // =========================================================
-          <main className="w-full min-h-screen">
+          <main className="w-full min-h-screen relative bg-slate-50 dark:bg-zinc-950">
+            {/* NUEVO: Botón flotante de Logout para la PWA */}
+            <div className="absolute top-4 right-4 z-50">
+              <form action={logout}>
+                <button
+                  type="submit"
+                  className="flex items-center justify-center p-2.5 md:px-4 md:py-2 text-sm font-bold text-red-600 bg-white border border-red-100 hover:bg-red-50 hover:border-red-200 dark:bg-zinc-900 dark:border-red-900 dark:hover:bg-red-950 rounded-full md:rounded-xl shadow-md transition-all"
+                  aria-label="Cerrar Sesión"
+                >
+                  <LogOut className="h-5 w-5 md:h-4 md:w-4" />
+                  {/* El texto se oculta en móviles muy chicos para ahorrar espacio y dejar solo el ícono */}
+                  <span className="hidden md:inline md:ml-2">Salir</span>
+                </button>
+              </form>
+            </div>
+
             {children}
           </main>
         ) : (
