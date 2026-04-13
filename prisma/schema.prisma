@@ -142,6 +142,7 @@ model Cliente {
   direccion           String?
   telefono            String?
   comentarios         String? @db.Text
+  limite_desc_cliente     Float?
 
   comprobante_default String @default("COMPROBANTE_X")
 
@@ -446,6 +447,9 @@ model EmpresaConfig {
   telefono             String  @default("11-0000-0000")
   redes_sociales       String  @default("@tendeco.pinturas")
   logo_url             String?
+  comision_base_global    Float @default(5)
+  penalizacion_global     Float @default(2)
+  limite_desc_global      Float @default(10)
 }
 
 // ==========================================
@@ -461,6 +465,8 @@ model Usuario {
   permisos String   @default("[\"VENTAS\", \"CLIENTES\"]")
   activo   Boolean  @default(true)
   creadoEn DateTime @default(now())
+  comision_personalizada  Float?
+  limite_desc_vendedor    Float?
 
   sucursalId        Int?
   sucursal          Sucursal?                   @relation(fields: [sucursalId], references: [id])
