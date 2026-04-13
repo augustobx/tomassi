@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import Link from "next/link";
+import prisma from "@/lib/prisma"; // IMPORTANTE: Agregamos Prisma para validar DB en tiempo real
 import { PedidosLink } from "@/components/pedidos-link";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -48,12 +49,25 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     try {
       const secretKey = process.env.SESSION_SECRET || 'tendeco-super-secret-key-2024';
       const { payload } = await jwtVerify(token, new TextEncoder().encode(secretKey));
-      esAdmin = payload.rol === 'ADMIN';
-      esVendedor = payload.rol === 'VENDEDOR';
-      rolUsuario = payload.rol as string;
-      permisos = (payload.permisos as string[]) || [];
-      nombreUsuario = payload.nombre as string;
-      isLogueado = true;
+
+      // =========================================================
+      // NUEVO: EXPULSIÓN INMEDIATA SI ESTÁ SUSPENDIDO
+      // Validamos contra la Base de Datos si la cuenta sigue activa
+      // =========================================================
+      const usuarioDB = await prisma.usuario.findUnique({
+        where: { id: Number(payload.id) }
+      });
+
+      if (!usuarioDB || !usuarioDB.activo) {
+        isLogueado = false; // Invalidamos la sesión si fue borrado o suspendido
+      } else {
+        esAdmin = payload.rol === 'ADMIN';
+        esVendedor = payload.rol === 'VENDEDOR';
+        rolUsuario = payload.rol as string;
+        permisos = (payload.permisos as string[]) || [];
+        nombreUsuario = payload.nombre as string;
+        isLogueado = true;
+      }
     } catch (error) {
       isLogueado = false; // El token expiró o es inválido
     }
@@ -75,7 +89,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           // VISTA VENDEDOR PWA (Sin Sidebar — Solo la PWA)
           // =========================================================
           <main className="w-full min-h-screen relative bg-slate-50 dark:bg-zinc-950">
-            {/* NUEVO: Botón flotante de Logout para la PWA */}
+            {/* Botón flotante de Logout para la PWA */}
             <div className="absolute top-4 right-4 z-50">
               <form action={logout}>
                 <button
@@ -201,14 +215,14 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     <p className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Gerencia</p>
 
                     {(esAdmin || permisos.includes("REPORTES")) && (
-                      <Link href="/reportes" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
-                        <BarChart4 className="h-4 w-4 opacity-70" /> Reportes Maestros
-                      </Link>
-                    )}
-                    {(esAdmin || permisos.includes("REPORTES")) && (
-                      <Link href="/reportes/vendedores" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
-                        <Users className="h-4 w-4 opacity-70" /> Comisiones y Rendimiento
-                      </Link>
+                      <>
+                        <Link href="/reportes" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+                          <BarChart4 className="h-4 w-4 opacity-70" /> Reportes Maestros
+                        </Link>
+                        <Link href="/reportes/vendedores" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+                          <Users className="h-4 w-4 opacity-70" /> Comisiones y Rendimiento
+                        </Link>
+                      </>
                     )}
                     {esAdmin && (
                       <Link href="/importar" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">

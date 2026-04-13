@@ -34,14 +34,15 @@ export async function login(formData: FormData) {
 
         const usuario = await prisma.usuario.findUnique({ where: { username } });
 
-        // En un sistema 100% real de producción, acá se usa bcrypt para comparar contraseñas encriptadas.
-        // Para este nivel operativo, lo dejamos directo.
         if (!usuario || usuario.password !== password) {
             return { success: false, error: "Usuario o contraseña incorrectos." };
         }
 
+        // ========================================================
+        // NUEVO: BLOQUEO DE INGRESO PARA USUARIOS SUSPENDIDOS
+        // ========================================================
         if (!usuario.activo) {
-            return { success: false, error: "Esta cuenta está desactivada. Hablá con el administrador." };
+            return { success: false, error: "Tu cuenta ha sido suspendida. Contactá al administrador." };
         }
 
         // Si todo está bien, le creamos la pulsera VIP
