@@ -319,6 +319,7 @@ export default function AdminPedidosPage() {
 
                             {/* BOTONERA DE ACCIÓN ADMIN */}
                             {pedidoActivo.estado === 'PENDIENTE' && (
+                                <div className="flex gap-2">
                                     <Button disabled={cargando} onClick={abrirModalEditar} variant="outline" className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold">
                                         <Edit className="w-4 h-4 mr-2" /> Editar
                                     </Button>
