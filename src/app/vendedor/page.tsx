@@ -291,6 +291,19 @@ export default function PwaVendedor() {
             cargarHistorial();
             if (accion === 'EDITAR') {
                 setCliente(pedido.cliente);
+                setSelectedListaId(pedido.listaPrecioId);
+                setNotas(pedido.notas || "");
+                const nuevoCarrito = pedido.detalles.map((d: any) => ({
+                    productoId: d.productoId,
+                    nombre: d.producto.nombre_producto || 'Producto Eliminado',
+                    cantidad: d.cantidad,
+                    precio_unitario: d.precio_unitario,
+                    descuento_individual: d.descuento_individual,
+                    precio_final: d.precio_final,
+                    subtotal: d.subtotal,
+                    stock_maximo: d.cantidad // Aproximación segura, para edición en calle.
+                }));
+                setCarrito(nuevoCarrito);
                 setTabActiva('NUEVO');
             }
         } else {
@@ -448,7 +461,7 @@ export default function PwaVendedor() {
                                                 <p className="font-black text-lg text-indigo-950">${pedido.total.toFixed(2)}</p>
                                             </div>
 
-                                            {pedido.estado === 'PENDIENTE' && (
+                                            {(pedido.estado === 'PENDIENTE' || pedido.estado === 'APROBADO') && (
                                                 <div className="flex gap-2">
                                                     <Button variant="outline" size="sm" onClick={() => manejarAccionHistorial(pedido, 'EDITAR')} className="flex-1 h-10 rounded-xl border-zinc-200 text-zinc-600 font-bold"><Edit className="w-4 h-4 mr-2" /> Editar</Button>
                                                     <Button variant="outline" size="sm" onClick={() => manejarAccionHistorial(pedido, 'CANCELAR')} className="flex-1 h-10 rounded-xl border-red-100 bg-red-50 text-red-600 font-bold"><Ban className="w-4 h-4 mr-2" /> Anular</Button>
@@ -605,8 +618,8 @@ export default function PwaVendedor() {
                                 <Input name="nombre" placeholder="Razón Social / Nombre" required className="h-12 rounded-xl bg-zinc-50" />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-zinc-400 uppercase">CUIT / DNI</label>
-                                <Input name="cuit" placeholder="Sin guiones" required className="h-12 rounded-xl bg-zinc-50" />
+                                <label className="text-[10px] font-black text-zinc-400 uppercase">CUIT / DNI (Opcional)</label>
+                                <Input name="cuit" placeholder="Sin guiones" className="h-12 rounded-xl bg-zinc-50" />
                             </div>
                             <div className="space-y-1">
                                 <label className="text-[10px] font-black text-zinc-400 uppercase">Dirección (Opcional)</label>

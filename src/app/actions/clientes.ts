@@ -294,12 +294,12 @@ export async function cobrarCuentaCorriente(clienteId: number, pagos: { metodo_p
 
 
 // src/app/actions/clientes.ts (Agregar al final)
-export async function registrarClientePWA(data: { nombre: string, cuit: string, direccion?: string, telefono?: string }) {
+export async function registrarClientePWA(data: { nombre: string, cuit?: string, direccion?: string, telefono?: string }) {
     try {
         const nuevo = await prisma.cliente.create({
             data: {
                 nombre_razon_social: data.nombre,
-                dni_cuit: data.cuit,
+                dni_cuit: data.cuit && data.cuit.trim() !== "" ? data.cuit : null,
                 direccion: data.direccion,
                 telefono: data.telefono,
                 condicion_iva: "CONSUMIDOR_FINAL",

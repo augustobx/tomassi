@@ -119,14 +119,15 @@ export async function accionarPedidoVendedor(pedidoId: number, accion: 'CANCELAR
 
             if (!pedido) throw new Error("Pedido no encontrado.");
 
-            // REGLA DE NEGOCIO: Bloqueo estricto si administración ya lo procesó
-            if (pedido.estado !== 'PENDIENTE') {
-                throw new Error("ACCESO DENEGADO: El pedido ya fue procesado por Administración. Solo ellos pueden modificarlo ahora.");
+            // REGLA DE NEGOCIO: Bloqueo estricto si administración ya lo procesó o canceló de forma definitiva
+            if (pedido.estado === 'FACTURADO' || pedido.estado === 'RECHAZADO' || pedido.estado === 'CANCELADO') {
+                throw new Error(`ACCESO DENEGADO: El pedido está ${pedido.estado}. Ya no se puede modificar desde la calle.`);
             }
 
             const depositoCentralId = 1;
 
             // A. DEVOLVER EL STOCK PREVENTIVO PARA QUE OTROS VENDEDORES PUEDAN VENDERLO
+            // Nota: Incluso si estaba APROBADO, el stock sigue estando descontado preventivamente (no facturado), así que se devuelve igual.
             for (const item of pedido.detalles) {
                 await tx.stockUbicacion.update({
                     where: { productoId_depositoId: { productoId: item.productoId, depositoId: depositoCentralId } },
@@ -448,5 +449,95 @@ export async function cambiarEstadoPedidoAdmin(
     } catch (error: any) {
         console.error("Error al procesar pedido:", error);
         return { success: false, error: error.message };
+    }
+}
+
+// ============================================================================
+// 5. EDITAR PEDIDO (ADMIN)
+// ============================================================================
+export async function editarPedidoAdmin(
+    pedidoId: number,
+    nuevoCarrito: any[],
+    subtotal: number,
+    total: number,
+    notas: string
+) {
+    try {
+        const resultado = await prisma.$transaction(async (tx) => {
+            const pedidoActual = await tx.pedido.findUnique({
+                where: { id: pedidoId },
+                include: { detalles: true }
+            });
+
+            if (!pedidoActual) throw new Error("Pedido no encontrado.");
+
+            if (pedidoActual.estado !== 'PENDIENTE' && pedidoActual.estado !== 'APROBADO') {
+                throw new Error(`El pedido está ${pedidoActual.estado}. No se puede editar.`);
+            }
+
+            const depositoCentralId = 1;
+
+            // A. DEVOLVER EL STOCK DEL PEDIDO ANTERIOR
+            for (const item of pedidoActual.detalles) {
+                await tx.stockUbicacion.update({
+                    where: { productoId_depositoId: { productoId: item.productoId, depositoId: depositoCentralId } },
+                    data: { cantidad: { increment: item.cantidad } }
+                });
+            }
+
+            // B. VERIFICAR NUEVO STOCK Y DESCONTARLO
+            for (const item of nuevoCarrito) {
+                const stockUbi = await tx.stockUbicacion.findUnique({
+                    where: { productoId_depositoId: { productoId: item.productoId, depositoId: depositoCentralId } }
+                });
+
+                if (!stockUbi || stockUbi.cantidad < item.cantidad) {
+                    const prod = await tx.producto.findUnique({ where: { id: item.productoId } });
+                    throw new Error(`SIN STOCK SUFICIENTE: Solo quedan ${stockUbi?.cantidad || 0} de "${prod?.nombre_producto}".`);
+                }
+
+                await tx.stockUbicacion.update({
+                    where: { productoId_depositoId: { productoId: item.productoId, depositoId: depositoCentralId } },
+                    data: { cantidad: { decrement: item.cantidad } }
+                });
+            }
+
+            // C. ELIMINAR DETALLES VIEJOS Y CREAR LOS NUEVOS
+            await tx.detallePedido.deleteMany({
+                where: { pedidoId: pedidoActual.id }
+            });
+
+            const fechaHora = new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+
+            const pedidoActualizado = await tx.pedido.update({
+                where: { id: pedidoActual.id },
+                data: {
+                    subtotal: subtotal,
+                    total: total,
+                    notas: notas + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> PEDIDO EDITADO.`,
+                    detalles: {
+                        create: nuevoCarrito.map((item: any) => ({
+                            productoId: item.productoId,
+                            cantidad: item.cantidad,
+                            precio_unitario: item.precio_unitario,
+                            descuento_individual: item.descuento_individual || 0,
+                            precio_final: item.precio_final,
+                            subtotal: item.subtotal
+                        }))
+                    }
+                }
+            });
+
+            return pedidoActualizado;
+        });
+
+        revalidatePath("/pedidos");
+        revalidatePath("/inventario");
+
+        return { success: true, data: resultado };
+
+    } catch (error: any) {
+        console.error("Error al editar pedido:", error);
+        return { success: false, error: error.message || "Error desconocido al editar." };
     }
 }

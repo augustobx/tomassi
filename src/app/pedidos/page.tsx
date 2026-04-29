@@ -1,20 +1,30 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { obtenerTodosLosPedidos, cambiarEstadoPedidoAdmin } from "@/app/actions/pedidos";
+import { obtenerTodosLosPedidos, cambiarEstadoPedidoAdmin, editarPedidoAdmin } from "@/app/actions/pedidos";
+import { buscarProductos } from "@/app/actions/ventas";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Search, ClipboardList, CheckCircle2, Ban, Receipt, User, Clock, Package, X, FileText, CreditCard } from "lucide-react";
+import { Search, ClipboardList, CheckCircle2, Ban, Receipt, User, Clock, Package, X, FileText, CreditCard, Edit, Calendar, Plus, Minus } from "lucide-react";
 
 export default function AdminPedidosPage() {
     const [pedidos, setPedidos] = useState<any[]>([]);
     const [filtroEstado, setFiltroEstado] = useState<string>("PENDIENTE");
     const [query, setQuery] = useState("");
+    const [filtroDesde, setFiltroDesde] = useState("");
+    const [filtroHasta, setFiltroHasta] = useState("");
+    const [filtroVendedor, setFiltroVendedor] = useState("TODOS");
 
     const [pedidoActivo, setPedidoActivo] = useState<any>(null);
     const [cargando, setCargando] = useState(false);
+
+    // Modal de edición
+    const [modalEditar, setModalEditar] = useState(false);
+    const [carritoEditar, setCarritoEditar] = useState<any[]>([]);
+    const [queryProducto, setQueryProducto] = useState("");
+    const [productosBuscados, setProductosBuscados] = useState<any[]>([]);
 
     // Modal de facturación
     const [modalFacturar, setModalFacturar] = useState(false);
@@ -35,13 +45,98 @@ export default function AdminPedidosPage() {
         }
     };
 
+    const vendedores = Array.from(new Set(pedidos.map(p => p.usuario?.nombre).filter(Boolean)));
+
     const pedidosFiltrados = pedidos.filter(p => {
         const coincideEstado = filtroEstado === "TODOS" || p.estado === filtroEstado;
+        const coincideVendedor = filtroVendedor === "TODOS" || p.usuario?.nombre === filtroVendedor;
         const coincideQuery = p.cliente?.nombre_razon_social.toLowerCase().includes(query.toLowerCase()) ||
             p.usuario?.nombre.toLowerCase().includes(query.toLowerCase()) ||
             p.numero.toString().includes(query);
-        return coincideEstado && coincideQuery;
+            
+        let coincideFecha = true;
+        if (filtroDesde) {
+            coincideFecha = coincideFecha && new Date(p.fecha) >= new Date(filtroDesde + "T00:00:00");
+        }
+        if (filtroHasta) {
+            coincideFecha = coincideFecha && new Date(p.fecha) <= new Date(filtroHasta + "T23:59:59");
+        }
+        
+        return coincideEstado && coincideVendedor && coincideQuery && coincideFecha;
     });
+
+    // Lógica Modal Editar
+    const abrirModalEditar = () => {
+        setCarritoEditar(pedidoActivo.detalles.map((d: any) => ({
+            productoId: d.productoId,
+            codigo_articulo: d.producto?.codigo_articulo,
+            nombre: d.producto?.nombre_producto,
+            cantidad: d.cantidad,
+            precio_unitario: d.precio_unitario,
+            descuento_individual: d.descuento_individual,
+            precio_final: d.precio_final,
+            subtotal: d.subtotal
+        })));
+        setModalEditar(true);
+    };
+
+    useEffect(() => {
+        if (queryProducto.length > 2) {
+            buscarProductos(queryProducto).then(setProductosBuscados);
+        } else {
+            setProductosBuscados([]);
+        }
+    }, [queryProducto]);
+
+    const ajustarCantidadEditar = (idx: number, delta: number) => {
+        const nuevos = [...carritoEditar];
+        nuevos[idx].cantidad += delta;
+        if (nuevos[idx].cantidad <= 0) {
+            nuevos.splice(idx, 1);
+        } else {
+            nuevos[idx].precio_final = nuevos[idx].precio_unitario * (1 - nuevos[idx].descuento_individual / 100);
+            nuevos[idx].subtotal = nuevos[idx].precio_final * nuevos[idx].cantidad;
+        }
+        setCarritoEditar(nuevos);
+    };
+
+    const agregarProductoEditar = (prod: any) => {
+        const alicuota = prod.alicuota_iva || 21;
+        // Precio base aproximado (Costo + IVA + Margen)
+        const margen = pedidoActivo.listaPrecio?.margen_defecto || 0;
+        const precio = prod.precio_costo * (1 + (alicuota / 100)) * (1 + (margen / 100));
+        
+        setCarritoEditar([...carritoEditar, {
+            productoId: prod.id,
+            codigo_articulo: prod.codigo_articulo,
+            nombre: prod.nombre_producto,
+            cantidad: 1,
+            precio_unitario: precio,
+            descuento_individual: 0,
+            precio_final: precio,
+            subtotal: precio
+        }]);
+        setQueryProducto("");
+        setProductosBuscados([]);
+    };
+
+    const guardarEdicion = async () => {
+        setCargando(true);
+        const subtotal = carritoEditar.reduce((acc, item) => acc + item.subtotal, 0);
+        const total = subtotal - (pedidoActivo.descuento_global || 0);
+        
+        const toastId = toast.loading(`Guardando cambios en pedido #${pedidoActivo.numero}...`);
+        const res = await editarPedidoAdmin(pedidoActivo.id, carritoEditar, subtotal, total, pedidoActivo.notas || "");
+        if (res.success) {
+            toast.success("Pedido editado correctamente", { id: toastId });
+            await cargarPedidos();
+            setModalEditar(false);
+            setPedidoActivo(null);
+        } else {
+            toast.error(res.error, { id: toastId });
+        }
+        setCargando(false);
+    };
 
     const procesarPedido = async (nuevoEstado: 'APROBADO' | 'RECHAZADO') => {
         if (!pedidoActivo) return;
@@ -139,9 +234,30 @@ export default function AdminPedidosPage() {
                         ))}
                     </div>
 
-                    <div className="relative">
-                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                        <Input placeholder="Buscar por cliente, vendedor o #" className="pl-9 h-9 bg-white text-xs rounded-xl" value={query} onChange={(e) => setQuery(e.target.value)} />
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                        <div className="relative">
+                            <Calendar className="absolute left-2 top-2 h-4 w-4 text-slate-400" />
+                            <Input type="date" className="pl-8 h-8 text-xs bg-white rounded-xl" value={filtroDesde} onChange={(e) => setFiltroDesde(e.target.value)} />
+                        </div>
+                        <div className="relative">
+                            <Calendar className="absolute left-2 top-2 h-4 w-4 text-slate-400" />
+                            <Input type="date" className="pl-8 h-8 text-xs bg-white rounded-xl" value={filtroHasta} onChange={(e) => setFiltroHasta(e.target.value)} />
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2 mb-2">
+                        <select 
+                            className="w-1/3 h-8 px-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-600 outline-none"
+                            value={filtroVendedor}
+                            onChange={(e) => setFiltroVendedor(e.target.value)}
+                        >
+                            <option value="TODOS">Vendedor...</option>
+                            {vendedores.map(v => <option key={v as string} value={v as string}>{v as string}</option>)}
+                        </select>
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-2 h-4 w-4 text-slate-400" />
+                            <Input placeholder="Buscar por cliente o #" className="pl-9 h-8 bg-white text-xs rounded-xl" value={query} onChange={(e) => setQuery(e.target.value)} />
+                        </div>
                     </div>
                 </div>
 
@@ -203,7 +319,9 @@ export default function AdminPedidosPage() {
 
                             {/* BOTONERA DE ACCIÓN ADMIN */}
                             {pedidoActivo.estado === 'PENDIENTE' && (
-                                <div className="flex gap-2">
+                                    <Button disabled={cargando} onClick={abrirModalEditar} variant="outline" className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold">
+                                        <Edit className="w-4 h-4 mr-2" /> Editar
+                                    </Button>
                                     <Button disabled={cargando} onClick={() => procesarPedido('RECHAZADO')} variant="outline" className="border-red-200 text-red-600 hover:bg-red-50 font-bold">
                                         <Ban className="w-4 h-4 mr-2" /> Rechazar
                                     </Button>
@@ -216,9 +334,14 @@ export default function AdminPedidosPage() {
                                 </div>
                             )}
                             {pedidoActivo.estado === 'APROBADO' && (
-                                <Button disabled={cargando} onClick={abrirModalFacturar} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-md">
-                                    <Receipt className="w-4 h-4 mr-2" /> Facturar (Ya entregado)
-                                </Button>
+                                <div className="flex gap-2">
+                                    <Button disabled={cargando} onClick={abrirModalEditar} variant="outline" className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold">
+                                        <Edit className="w-4 h-4 mr-2" /> Editar
+                                    </Button>
+                                    <Button disabled={cargando} onClick={abrirModalFacturar} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-md">
+                                        <Receipt className="w-4 h-4 mr-2" /> Facturar (Ya entregado)
+                                    </Button>
+                                </div>
                             )}
                         </div>
 
@@ -406,6 +529,110 @@ export default function AdminPedidosPage() {
                             >
                                 <Receipt className="w-4 h-4 mr-2" /> Confirmar Facturación
                             </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ========= MODAL EDITAR PEDIDO ADMIN ========= */}
+            {modalEditar && pedidoActivo && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        
+                        {/* Header */}
+                        <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                    <Edit className="h-5 w-5 text-indigo-600" /> Editar Pedido #{pedidoActivo.numero}
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-0.5">Cliente: {pedidoActivo.cliente?.nombre_razon_social}</p>
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={() => setModalEditar(false)} className="h-8 w-8 rounded-full text-slate-400 hover:bg-slate-200">
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                            
+                            {/* Buscador de Productos */}
+                            <div className="relative">
+                                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                                <Input 
+                                    placeholder="Buscar producto para agregar..." 
+                                    className="pl-9 h-10 bg-slate-50 border-slate-200 rounded-xl"
+                                    value={queryProducto}
+                                    onChange={(e) => setQueryProducto(e.target.value)}
+                                />
+                                {productosBuscados.length > 0 && (
+                                    <div className="absolute top-11 left-0 right-0 bg-white border border-slate-200 shadow-xl rounded-xl z-10 max-h-48 overflow-y-auto divide-y divide-slate-100">
+                                        {productosBuscados.map(prod => (
+                                            <div key={prod.id} className="p-3 hover:bg-slate-50 flex justify-between items-center cursor-pointer" onClick={() => agregarProductoEditar(prod)}>
+                                                <div>
+                                                    <p className="text-sm font-bold text-slate-800">{prod.nombre_producto}</p>
+                                                    <p className="text-[10px] text-slate-400">Stock: {prod.stock_actual}</p>
+                                                </div>
+                                                <Plus className="h-4 w-4 text-indigo-600" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Lista de Items */}
+                            <div className="border border-slate-200 rounded-xl overflow-hidden">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 text-slate-500 font-bold text-xs border-b border-slate-200">
+                                        <tr>
+                                            <th className="px-4 py-2">Producto</th>
+                                            <th className="px-4 py-2 text-center w-32">Cant.</th>
+                                            <th className="px-4 py-2 text-right">Unitario</th>
+                                            <th className="px-4 py-2 text-right">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {carritoEditar.map((item, idx) => (
+                                            <tr key={idx} className="bg-white">
+                                                <td className="px-4 py-3 font-semibold text-slate-700 text-xs">{item.nombre}</td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center justify-between bg-slate-50 rounded-lg p-1 border border-slate-200">
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-500" onClick={() => ajustarCantidadEditar(idx, -1)}><Minus className="h-3 w-3" /></Button>
+                                                        <span className="font-black text-slate-800 text-xs">{item.cantidad}</span>
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-500" onClick={() => ajustarCantidadEditar(idx, 1)}><Plus className="h-3 w-3" /></Button>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-slate-500 text-xs">${item.precio_unitario.toFixed(2)}</td>
+                                                <td className="px-4 py-3 text-right font-black text-emerald-600 text-xs">${item.subtotal.toFixed(2)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            {carritoEditar.length === 0 && (
+                                <p className="text-center text-red-500 text-sm font-bold py-4">El pedido quedará vacío y podría ser inválido.</p>
+                            )}
+
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
+                            <div>
+                                <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Nuevo Total</p>
+                                <p className="text-2xl font-black text-indigo-900">${carritoEditar.reduce((acc, item) => acc + item.subtotal, 0).toFixed(2)}</p>
+                            </div>
+                            <div className="flex gap-3">
+                                <Button variant="outline" onClick={() => setModalEditar(false)} className="bg-white">
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    disabled={cargando || carritoEditar.length === 0}
+                                    onClick={guardarEdicion}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md px-6"
+                                >
+                                    <CheckCircle2 className="w-4 h-4 mr-2" /> Guardar Cambios
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
