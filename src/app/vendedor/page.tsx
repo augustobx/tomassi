@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import {
     Trash2, Search, ShoppingCart, User, FileText, Ban, PackageSearch,
     Plus, Minus, X, ChevronRight, Bookmark, Tag, Percent, History, Edit,
-    CheckCircle2, RefreshCw, UserPlus, CloudOff, Wifi
+    CheckCircle2, RefreshCw, UserPlus, CloudOff, Wifi, Eye
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -41,6 +41,7 @@ export default function PwaVendedor() {
     // ESTADOS DEL PEDIDO ACTUAL
     // ==========================================
     const [cliente, setCliente] = useState<any>(null);
+    const [pedidoVer, setPedidoVer] = useState<any>(null);
     const [selectedListaId, setSelectedListaId] = useState<number>(1);
     const [notas, setNotas] = useState("");
     const [carrito, setCarrito] = useState<any[]>([]);
@@ -461,12 +462,9 @@ export default function PwaVendedor() {
                                                 <p className="font-black text-lg text-indigo-950">${pedido.total.toFixed(2)}</p>
                                             </div>
 
-                                            {(pedido.estado === 'PENDIENTE' || pedido.estado === 'APROBADO') && (
-                                                <div className="flex gap-2">
-                                                    <Button variant="outline" size="sm" onClick={() => manejarAccionHistorial(pedido, 'EDITAR')} className="flex-1 h-10 rounded-xl border-zinc-200 text-zinc-600 font-bold"><Edit className="w-4 h-4 mr-2" /> Editar</Button>
-                                                    <Button variant="outline" size="sm" onClick={() => manejarAccionHistorial(pedido, 'CANCELAR')} className="flex-1 h-10 rounded-xl border-red-100 bg-red-50 text-red-600 font-bold"><Ban className="w-4 h-4 mr-2" /> Anular</Button>
-                                                </div>
-                                            )}
+                                            <div className="flex gap-2">
+                                                <Button variant="outline" size="sm" onClick={() => setPedidoVer(pedido)} className="flex-1 h-10 rounded-xl border-indigo-200 text-indigo-600 font-bold bg-indigo-50"><Eye className="w-4 h-4 mr-2" /> Ver Detalles</Button>
+                                            </div>
                                         </CardContent>
                                     </Card>
                                 ))}
@@ -599,6 +597,60 @@ export default function PwaVendedor() {
                     <div className="pt-4 shrink-0">
                         <Button onClick={confirmarPedido} className="w-full h-16 bg-emerald-500 hover:bg-emerald-600 shadow-xl shadow-emerald-500/20 rounded-2xl font-black text-lg text-white">
                             <CheckCircle2 className="mr-2 h-6 w-6" /> CONFIRMAR Y ENVIAR
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            {/* DRAWER VER PEDIDO */}
+            {pedidoVer && (
+                <div className="fixed inset-0 z-[60] bg-zinc-900 flex flex-col p-4 pt-safe animate-in zoom-in-95 duration-300">
+                    <div className="flex-1 bg-white rounded-3xl p-6 overflow-y-auto relative shadow-2xl">
+                        <Button variant="ghost" size="icon" onClick={() => setPedidoVer(null)} className="absolute top-4 right-4 bg-zinc-100 rounded-full h-10 w-10 text-zinc-500"><X className="h-5 w-5" /></Button>
+
+                        <div className="text-center border-b border-dashed border-zinc-300 pb-5 mb-5 mt-2">
+                            <h2 className="font-black text-2xl text-zinc-900 tracking-tight">PEDIDO #{pedidoVer.numero}</h2>
+                            <p className="text-xs font-bold text-zinc-400 uppercase mt-2">{pedidoVer.cliente?.nombre_razon_social}</p>
+                            <div className={`text-[10px] font-black px-2 py-1 rounded-lg inline-block mt-2 ${pedidoVer.estado === 'PENDIENTE' ? 'bg-amber-100 text-amber-700' : pedidoVer.estado === 'CANCELADO' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
+                                {pedidoVer.estado}
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 mb-6">
+                            {pedidoVer.detalles.map((item: any, i: number) => (
+                                <div key={i} className="flex justify-between items-start">
+                                    <div className="max-w-[70%]">
+                                        <p className="font-bold text-xs text-zinc-800 leading-tight">{item.cantidad}x {item.producto?.nombre_producto || 'Producto'}</p>
+                                        {item.descuento_individual > 0 && <p className="text-[9px] font-black text-emerald-600">Dto: {item.descuento_individual}%</p>}
+                                    </div>
+                                    <p className="font-black text-sm text-zinc-900">${item.subtotal.toFixed(2)}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="border-t border-dashed border-zinc-300 pt-5 mb-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <span className="font-black text-zinc-400">TOTAL</span>
+                                <span className="font-black text-2xl text-indigo-600">${pedidoVer.total.toFixed(2)}</span>
+                            </div>
+                        </div>
+
+                        {pedidoVer.notas && (
+                            <div className="mt-4 bg-amber-50 p-3 rounded-xl border border-amber-100 italic text-xs text-amber-900">
+                                <b>Notas:</b> "{pedidoVer.notas}"
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="pt-4 shrink-0 space-y-2">
+                        {(pedidoVer.estado === 'PENDIENTE' || pedidoVer.estado === 'APROBADO') && (
+                            <div className="flex gap-2">
+                                <Button onClick={() => { manejarAccionHistorial(pedidoVer, 'EDITAR'); setPedidoVer(null); }} className="flex-1 h-14 bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-500/20 rounded-2xl font-black text-white"><Edit className="w-5 h-5 mr-2" /> EDITAR</Button>
+                                <Button onClick={() => { manejarAccionHistorial(pedidoVer, 'CANCELAR'); setPedidoVer(null); }} className="flex-1 h-14 bg-red-500 hover:bg-red-600 shadow-xl shadow-red-500/20 rounded-2xl font-black text-white"><Ban className="w-5 h-5 mr-2" /> ANULAR</Button>
+                            </div>
+                        )}
+                        <Button onClick={() => setPedidoVer(null)} className="w-full h-14 bg-zinc-800 hover:bg-zinc-900 shadow-xl shadow-zinc-800/20 rounded-2xl font-black text-white">
+                            CERRAR
                         </Button>
                     </div>
                 </div>
