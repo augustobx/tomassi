@@ -53,7 +53,7 @@ export default function AdminPedidosPage() {
         const coincideQuery = p.cliente?.nombre_razon_social.toLowerCase().includes(query.toLowerCase()) ||
             p.usuario?.nombre.toLowerCase().includes(query.toLowerCase()) ||
             p.numero.toString().includes(query);
-            
+
         let coincideFecha = true;
         if (filtroDesde) {
             coincideFecha = coincideFecha && new Date(p.fecha) >= new Date(filtroDesde + "T00:00:00");
@@ -61,7 +61,7 @@ export default function AdminPedidosPage() {
         if (filtroHasta) {
             coincideFecha = coincideFecha && new Date(p.fecha) <= new Date(filtroHasta + "T23:59:59");
         }
-        
+
         return coincideEstado && coincideVendedor && coincideQuery && coincideFecha;
     });
 
@@ -105,7 +105,7 @@ export default function AdminPedidosPage() {
         // Precio base aproximado (Costo + IVA + Margen)
         const margen = pedidoActivo.listaPrecio?.margen_defecto || 0;
         const precio = prod.precio_costo * (1 + (alicuota / 100)) * (1 + (margen / 100));
-        
+
         setCarritoEditar([...carritoEditar, {
             productoId: prod.id,
             codigo_articulo: prod.codigo_articulo,
@@ -124,7 +124,7 @@ export default function AdminPedidosPage() {
         setCargando(true);
         const subtotal = carritoEditar.reduce((acc, item) => acc + item.subtotal, 0);
         const total = subtotal - (pedidoActivo.descuento_global || 0);
-        
+
         const toastId = toast.loading(`Guardando cambios en pedido #${pedidoActivo.numero}...`);
         const res = await editarPedidoAdmin(pedidoActivo.id, carritoEditar, subtotal, total, pedidoActivo.notas || "");
         if (res.success) {
@@ -246,7 +246,7 @@ export default function AdminPedidosPage() {
                     </div>
 
                     <div className="flex gap-2 mb-2">
-                        <select 
+                        <select
                             className="w-1/3 h-8 px-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-600 outline-none"
                             value={filtroVendedor}
                             onChange={(e) => setFiltroVendedor(e.target.value)}
@@ -363,7 +363,7 @@ export default function AdminPedidosPage() {
                                     <CardHeader className="p-4 pb-2"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Información Interna</p></CardHeader>
                                     <CardContent className="p-4 pt-0">
                                         <p className="font-bold text-slate-800 text-base flex items-center"><User className="w-4 h-4 mr-2 text-slate-400" /> Vendedor: {pedidoActivo.usuario?.nombre}</p>
-                                        
+
                                         {/* Referencia a la venta generada */}
                                         {pedidoActivo.ventaId && (
                                             <div className="mt-2 bg-emerald-50 p-2 rounded-lg border border-emerald-100">
@@ -372,7 +372,7 @@ export default function AdminPedidosPage() {
                                                 </p>
                                             </div>
                                         )}
-                                        
+
                                         <div className="mt-3 bg-amber-50 p-3 rounded-lg border border-amber-100">
                                             <p className="text-[10px] font-bold text-amber-700 uppercase mb-1">Notas del Pedido:</p>
                                             <p className="text-xs text-amber-900 whitespace-pre-wrap">{pedidoActivo.notas || 'Sin notas.'}</p>
@@ -438,7 +438,7 @@ export default function AdminPedidosPage() {
             {modalFacturar && pedidoActivo && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden">
-                        
+
                         {/* Header */}
                         <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                             <div>
@@ -454,7 +454,7 @@ export default function AdminPedidosPage() {
 
                         {/* Body */}
                         <div className="p-6 space-y-5">
-                            
+
                             {/* Info del pago */}
                             <div className="flex gap-4">
                                 <div className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl">
@@ -493,11 +493,10 @@ export default function AdminPedidosPage() {
                                             key={tipo.id}
                                             type="button"
                                             onClick={() => setTipoComprobanteSeleccionado(tipo.id)}
-                                            className={`p-3 rounded-xl border-2 text-left transition-all ${
-                                                tipoComprobanteSeleccionado === tipo.id
+                                            className={`p-3 rounded-xl border-2 text-left transition-all ${tipoComprobanteSeleccionado === tipo.id
                                                     ? 'border-emerald-400 bg-emerald-50 shadow-sm'
                                                     : 'border-slate-200 bg-white hover:border-emerald-200 hover:bg-slate-50'
-                                            }`}
+                                                }`}
                                         >
                                             <p className={`font-bold text-sm ${tipoComprobanteSeleccionado === tipo.id ? 'text-emerald-800' : 'text-slate-700'}`}>
                                                 {tipo.label}
@@ -539,7 +538,7 @@ export default function AdminPedidosPage() {
             {modalEditar && pedidoActivo && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                        
+
                         {/* Header */}
                         <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
                             <div>
@@ -555,12 +554,12 @@ export default function AdminPedidosPage() {
 
                         {/* Body */}
                         <div className="p-6 overflow-y-auto flex-1 space-y-4">
-                            
+
                             {/* Buscador de Productos */}
                             <div className="relative">
                                 <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                                <Input 
-                                    placeholder="Buscar producto para agregar..." 
+                                <Input
+                                    placeholder="Buscar producto para agregar..."
                                     className="pl-9 h-10 bg-slate-50 border-slate-200 rounded-xl"
                                     value={queryProducto}
                                     onChange={(e) => setQueryProducto(e.target.value)}
@@ -609,7 +608,7 @@ export default function AdminPedidosPage() {
                                     </tbody>
                                 </table>
                             </div>
-                            
+
                             {carritoEditar.length === 0 && (
                                 <p className="text-center text-red-500 text-sm font-bold py-4">El pedido quedará vacío y podría ser inválido.</p>
                             )}
