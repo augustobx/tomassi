@@ -454,6 +454,9 @@ model EmpresaConfig {
   comision_base_global Float   @default(5)
   penalizacion_global  Float   @default(2)
   limite_desc_global   Float   @default(10)
+  
+  // NUEVO: Configuración de redondeo de precios
+  redondear_a_cinco    Boolean @default(false)
 }
 
 // ==========================================

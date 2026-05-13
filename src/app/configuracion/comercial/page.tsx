@@ -6,13 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Save, Percent, AlertOctagon, TrendingDown, Users } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Save, Percent, AlertOctagon, TrendingDown, Users, Calculator } from "lucide-react";
 
 export default function ConfiguracionComercialPage() {
     const [isPending, startTransition] = useTransition();
     const [data, setData] = useState<any>(null);
 
-    const [globales, setGlobales] = useState({ comision: 5, penalizacion: 2, limite: 10 });
+    const [globales, setGlobales] = useState({ comision: 5, penalizacion: 2, limite: 10, redondear_a_cinco: false });
 
     const cargarDatos = () => {
         obtenerConfiguracionComercial().then(res => {
@@ -22,7 +23,8 @@ export default function ConfiguracionComercialPage() {
                     setGlobales({
                         comision: res.config.comision_base_global,
                         penalizacion: res.config.penalizacion_global,
-                        limite: res.config.limite_desc_global
+                        limite: res.config.limite_desc_global,
+                        redondear_a_cinco: res.config.redondear_a_cinco
                     });
                 }
             }
@@ -67,6 +69,13 @@ export default function ConfiguracionComercialPage() {
                     <div>
                         <label className="text-xs font-bold text-orange-500 uppercase tracking-wider flex items-center gap-1"><TrendingDown className="h-3 w-3" /> Penalización a Restar (%)</label>
                         <Input type="number" value={globales.penalizacion} onChange={e => setGlobales({ ...globales, penalizacion: Number(e.target.value) })} className="mt-2 font-black text-lg bg-slate-50" />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1"><Calculator className="h-3 w-3" /> Redondeo a 0 o 5</label>
+                        <div className="flex items-center gap-2 mt-2">
+                            <Switch checked={globales.redondear_a_cinco} onCheckedChange={val => setGlobales({ ...globales, redondear_a_cinco: val })} />
+                            <span className="text-sm font-bold text-slate-700">{globales.redondear_a_cinco ? "Encendido" : "Apagado"}</span>
+                        </div>
                     </div>
                     <div className="md:col-span-3 flex justify-end">
                         <Button onClick={guardarGlobales} disabled={isPending} className="bg-indigo-600 hover:bg-indigo-700 font-bold"><Save className="mr-2 h-4 w-4" /> Guardar Globales</Button>

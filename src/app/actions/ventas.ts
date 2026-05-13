@@ -34,6 +34,13 @@ export async function obtenerListasPrecio() {
     });
 }
 
+export async function obtenerConfiguracionGlobal() {
+    const config = await prisma.empresaConfig.findFirst();
+    return {
+        redondear_a_cinco: config?.redondear_a_cinco || false
+    };
+}
+
 // NUEVAS FUNCIONES PARA FILTROS EN LA PWA
 export async function obtenerMarcas() {
     return await prisma.marca.findMany({

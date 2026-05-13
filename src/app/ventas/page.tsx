@@ -8,12 +8,12 @@ import {
     CheckSquare, Square, AlertTriangle, CreditCard, MessageSquare, Eye
 } from "lucide-react";
 
-import { buscarClientes, buscarProductos, previsualizarProximoComprobante, registrarVenta, getConsumidorFinal } from "@/app/actions/ventas";
+import { buscarClientes, buscarProductos, previsualizarProximoComprobante, registrarVenta, getConsumidorFinal, obtenerConfiguracionGlobal } from "@/app/actions/ventas";
 import { getListasPrecio, getSucursales } from "@/app/actions/configuracion";
 import { crearCliente, getResumenFinancieroCliente } from "@/app/actions/clientes";
 import { getClientSession } from "@/app/actions/auth";
 import {
-    calcularPrecioConCascada,
+    calcularPrecioConCascada, redondearPrecio,
     formatCantidad, getUnidadLabel, getStepParaMedicion,
     type TipoMedicionType,
 } from "@/lib/utils";
@@ -37,6 +37,7 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
     // ESTADOS DEL SISTEMA
     // ==========================================
     const [listasGlobales, setListasGlobales] = useState<any[]>([]);
+    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false });
 
     // Sucursales y Depósitos Activos
     const [usuarioSesion, setUsuarioSesion] = useState<any>(null);
@@ -99,6 +100,8 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
         const init = async () => {
             const listas = await getListasPrecio();
             setListasGlobales(listas);
+            const config = await obtenerConfiguracionGlobal();
+            setConfiguracionGlobal(config);
 
             const session = await getClientSession();
             setUsuarioSesion(session);
@@ -252,7 +255,7 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
 
         const precioBaseCalculado = calcularPrecioConCascada(
             producto.precio_costo, producto.descuento_proveedor, producto.alicuota_iva,
-            aumProv, aumMarca, aumCat, margenFinal
+            aumProv, aumMarca, aumCat, margenFinal, configuracionGlobal.redondear_a_cinco
         );
 
         const tipo = (producto.tipo_medicion || "UNIDAD") as TipoMedicionType;
@@ -298,11 +301,12 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
 
                 const precioBaseCalculado = calcularPrecioConCascada(
                     prod.precio_costo, prod.descuento_proveedor, prod.alicuota_iva,
-                    aumProv, aumMarca, aumCat, margenFinal
+                    aumProv, aumMarca, aumCat, margenFinal, configuracionGlobal.redondear_a_cinco
                 );
 
                 const nuevoPrecioUnitario = Number(precioBaseCalculado.toFixed(2));
-                const nuevoPrecioFinal = Number((nuevoPrecioUnitario * (1 - (item.descuento_individual / 100))).toFixed(2));
+                const precioSinRedondear = nuevoPrecioUnitario * (1 - (item.descuento_individual / 100));
+                const nuevoPrecioFinal = Number(redondearPrecio(precioSinRedondear, configuracionGlobal.redondear_a_cinco).toFixed(2));
 
                 return {
                     ...item,
@@ -329,7 +333,7 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
         else if (campo === "descuento_individual") {
             item.descuento_individual = numValue;
             const precioConDesc = item.precio_unitario * (1 - (numValue / 100));
-            item.precio_final = Number(precioConDesc.toFixed(2));
+            item.precio_final = Number(redondearPrecio(precioConDesc, configuracionGlobal.redondear_a_cinco).toFixed(2));
             item.subtotal = item.cantidad * item.precio_final;
         }
         else if (campo === "precio_final") {

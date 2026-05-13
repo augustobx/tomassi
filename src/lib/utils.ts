@@ -22,6 +22,15 @@ export function calcularPrecioFinal(costoIva: number, porcentajeMarcacion: numbe
 }
 
 // ==========================================
+// REDONDEO DE PRECIOS
+// ==========================================
+
+export function redondearPrecio(precio: number, activo: boolean): number {
+  if (!activo) return precio;
+  return Math.round(precio / 5) * 5;
+}
+
+// ==========================================
 // CÁLCULO CON CASCADA P → M → C
 // ==========================================
 
@@ -41,14 +50,20 @@ export function calcularPrecioConCascada(
   aumentoProveedor: number,
   aumentoMarca: number,
   aumentoCategoria: number,
-  margenLista: number
+  margenLista: number,
+  redondearA5: boolean = false
 ): number {
   const costoNeto = calcularCostoNeto(precioCosto, descuentoProveedor);
   const costoIva = calcularCostoIva(costoNeto, alicuotaIva);
   const conAumProv = costoIva * (1 + (aumentoProveedor || 0) / 100);
   const conAumMarca = conAumProv * (1 + (aumentoMarca || 0) / 100);
   const conAumCat = conAumMarca * (1 + (aumentoCategoria || 0) / 100);
-  const precioFinal = conAumCat * (1 + (margenLista || 0) / 100);
+  let precioFinal = conAumCat * (1 + (margenLista || 0) / 100);
+  
+  if (redondearA5) {
+    precioFinal = redondearPrecio(precioFinal, true);
+  }
+  
   return precioFinal;
 }
 

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { obtenerTodosLosPedidos, cambiarEstadoPedidoAdmin, editarPedidoAdmin } from "@/app/actions/pedidos";
-import { buscarProductos } from "@/app/actions/ventas";
+import { buscarProductos, obtenerConfiguracionGlobal } from "@/app/actions/ventas";
+import { redondearPrecio } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -19,6 +20,7 @@ export default function AdminPedidosPage() {
 
     const [pedidoActivo, setPedidoActivo] = useState<any>(null);
     const [cargando, setCargando] = useState(false);
+    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false });
 
     // Modal de edición
     const [modalEditar, setModalEditar] = useState(false);
@@ -32,6 +34,7 @@ export default function AdminPedidosPage() {
 
     useEffect(() => {
         cargarPedidos();
+        obtenerConfiguracionGlobal().then(setConfiguracionGlobal);
     }, []);
 
     const cargarPedidos = async () => {
@@ -94,7 +97,8 @@ export default function AdminPedidosPage() {
         if (nuevos[idx].cantidad <= 0) {
             nuevos.splice(idx, 1);
         } else {
-            nuevos[idx].precio_final = nuevos[idx].precio_unitario * (1 - nuevos[idx].descuento_individual / 100);
+            const finalSinRedondear = nuevos[idx].precio_unitario * (1 - nuevos[idx].descuento_individual / 100);
+            nuevos[idx].precio_final = redondearPrecio(finalSinRedondear, configuracionGlobal.redondear_a_cinco);
             nuevos[idx].subtotal = nuevos[idx].precio_final * nuevos[idx].cantidad;
         }
         setCarritoEditar(nuevos);
@@ -104,7 +108,8 @@ export default function AdminPedidosPage() {
         const alicuota = prod.alicuota_iva || 21;
         // Precio base aproximado (Costo + IVA + Margen)
         const margen = pedidoActivo.listaPrecio?.margen_defecto || 0;
-        const precio = prod.precio_costo * (1 + (alicuota / 100)) * (1 + (margen / 100));
+        const precioBruto = prod.precio_costo * (1 + (alicuota / 100)) * (1 + (margen / 100));
+        const precio = redondearPrecio(precioBruto, configuracionGlobal.redondear_a_cinco);
 
         setCarritoEditar([...carritoEditar, {
             productoId: prod.id,

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { buscarClientes, buscarProductos, obtenerListasPrecio, obtenerMarcas, obtenerCategorias } from "@/app/actions/ventas";
+import { buscarClientes, buscarProductos, obtenerListasPrecio, obtenerMarcas, obtenerCategorias, obtenerConfiguracionGlobal } from "@/app/actions/ventas";
 import { registrarPedidoPWA, obtenerPedidosVendedor, accionarPedidoVendedor } from "@/app/actions/pedidos";
 import { registrarClientePWA } from "@/app/actions/clientes";
 import { guardarOffline, obtenerTodosOffline, eliminarOffline, STORE_PEDIDOS, STORE_CLIENTES } from "@/lib/offline-db";
+import { redondearPrecio } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ export default function PwaVendedor() {
     const [listas, setListas] = useState<any[]>([]);
     const [marcas, setMarcas] = useState<any[]>([]);
     const [categorias, setCategorias] = useState<any[]>([]);
+    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false });
     const [pedidosHistorial, setPedidosHistorial] = useState<any[]>([]);
     const [filtroHistorial, setFiltroHistorial] = useState("");
 
@@ -71,6 +73,7 @@ export default function PwaVendedor() {
         obtenerListasPrecio().then(setListas);
         obtenerMarcas().then(setMarcas);
         obtenerCategorias().then(setCategorias);
+        obtenerConfiguracionGlobal().then(setConfiguracionGlobal);
         cargarHistorial();
         intentarSincronizar();
 
@@ -144,7 +147,8 @@ export default function PwaVendedor() {
         let margen = listas.find(l => l.id === listaId)?.margen_defecto || 0;
         const pivot = producto.listas_precios?.find((lp: any) => lp.listaPrecioId === listaId);
         if (pivot && pivot.margen_personalizado !== null) margen = pivot.margen_personalizado;
-        return precioCostoIva * (1 + (margen / 100));
+        const precioSinRedondear = precioCostoIva * (1 + (margen / 100));
+        return redondearPrecio(precioSinRedondear, configuracionGlobal.redondear_a_cinco);
     };
 
     const handleClienteSelect = (c: any) => {
@@ -200,7 +204,8 @@ export default function PwaVendedor() {
 
     const recalcularTotalesItem = (item: any) => {
         const descuentoMonto = item.precio_unitario * (item.descuento_individual / 100);
-        item.precio_final = item.precio_unitario - descuentoMonto;
+        let final = item.precio_unitario - descuentoMonto;
+        item.precio_final = redondearPrecio(final, configuracionGlobal.redondear_a_cinco);
         item.subtotal = item.precio_final * item.cantidad;
     };
 

@@ -9,11 +9,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import { buscarClientes, buscarProductos } from "@/app/actions/ventas";
+import { buscarClientes, buscarProductos, obtenerConfiguracionGlobal } from "@/app/actions/ventas";
 import { getListasPrecio } from "@/app/actions/configuracion";
 import { crearPresupuesto } from "@/app/actions/presupuestos";
-import {
-    calcularPrecioConCascada, formatCantidad, getUnidadLabel, getStepParaMedicion,
+    calcularPrecioConCascada, redondearPrecio, formatCantidad, getUnidadLabel, getStepParaMedicion,
     type TipoMedicionType,
 } from "@/lib/utils";
 
@@ -30,6 +29,7 @@ export default function NuevoPresupuestoPage() {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [listasGlobales, setListasGlobales] = useState<any[]>([]);
+    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false });
 
     const [clienteQuery, setClienteQuery] = useState("");
     const [clientesResultados, setClientesResultados] = useState<any[]>([]);
@@ -47,7 +47,10 @@ export default function NuevoPresupuestoPage() {
     const [descuentoGlobal, setDescuentoGlobal] = useState(0);
 
     useEffect(() => {
-        const init = async () => { setListasGlobales(await getListasPrecio()); };
+        const init = async () => { 
+            setListasGlobales(await getListasPrecio()); 
+            setConfiguracionGlobal(await obtenerConfiguracionGlobal());
+        };
         init();
     }, []);
 
@@ -86,7 +89,7 @@ export default function NuevoPresupuestoPage() {
         const aumMarca = prod.marca?.aumento_porcentaje || 0;
         const aumCat = prod.categoria?.aumento_porcentaje || 0;
 
-        const precio = calcularPrecioConCascada(prod.precio_costo, prod.descuento_proveedor, prod.alicuota_iva, aumProv, aumMarca, aumCat, margenFinal);
+        const precio = calcularPrecioConCascada(prod.precio_costo, prod.descuento_proveedor, prod.alicuota_iva, aumProv, aumMarca, aumCat, margenFinal, configuracionGlobal.redondear_a_cinco);
         const tipo = (prod.tipo_medicion || "UNIDAD") as TipoMedicionType;
 
         setCarrito([...carrito, {
@@ -105,7 +108,8 @@ export default function NuevoPresupuestoPage() {
         if (campo === "cantidad") { item.cantidad = numValue; item.subtotal = numValue * item.precio_final; }
         else if (campo === "descuento_individual") {
             item.descuento_individual = numValue;
-            item.precio_final = Number((item.precio_unitario * (1 - numValue / 100)).toFixed(2));
+            const precioSinRedondear = item.precio_unitario * (1 - numValue / 100);
+            item.precio_final = Number(redondearPrecio(precioSinRedondear, configuracionGlobal.redondear_a_cinco).toFixed(2));
             item.subtotal = item.cantidad * item.precio_final;
         }
         else if (campo === "precio_final") { item.precio_final = numValue; item.descuento_individual = 0; item.subtotal = item.cantidad * numValue; }
@@ -299,7 +303,7 @@ export default function NuevoPresupuestoPage() {
                                     const pivot = prod.listas_precios?.find((p: any) => p.listaPrecioId === listaIDNum);
                                     const listaGlobal = listasGlobales.find(l => l.id === listaIDNum);
                                     const margenFinal = (pivot?.margen_personalizado ?? listaGlobal?.margen_defecto ?? 0);
-                                    const precio = calcularPrecioConCascada(prod.precio_costo, prod.descuento_proveedor, prod.alicuota_iva, prod.proveedor?.aumento_porcentaje || 0, prod.marca?.aumento_porcentaje || 0, prod.categoria?.aumento_porcentaje || 0, margenFinal);
+                                    const precio = calcularPrecioConCascada(prod.precio_costo, prod.descuento_proveedor, prod.alicuota_iva, prod.proveedor?.aumento_porcentaje || 0, prod.marca?.aumento_porcentaje || 0, prod.categoria?.aumento_porcentaje || 0, margenFinal, configuracionGlobal.redondear_a_cinco);
                                     const sinLista = !pivot;
                                     return (
                                         <div key={prod.id} className={`flex justify-between items-center p-3 rounded-xl border bg-white shadow-sm ${sinLista ? 'opacity-50 border-amber-200' : 'border-slate-200 hover:border-emerald-200'}`}>

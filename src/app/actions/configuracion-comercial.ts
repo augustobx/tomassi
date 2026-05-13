@@ -12,14 +12,15 @@ export async function obtenerConfiguracionComercial() {
     return { success: true, config, vendedores, clientes, categorias };
 }
 
-export async function actualizarReglasGlobales(data: { comision: number, penalizacion: number, limite: number }) {
+export async function actualizarReglasGlobales(data: { comision: number, penalizacion: number, limite: number, redondear_a_cinco?: boolean }) {
     try {
         await prisma.empresaConfig.update({
             where: { id: 1 },
             data: {
                 comision_base_global: data.comision,
                 penalizacion_global: data.penalizacion,
-                limite_desc_global: data.limite
+                limite_desc_global: data.limite,
+                redondear_a_cinco: data.redondear_a_cinco
             }
         });
         revalidatePath('/configuracion/comercial');
