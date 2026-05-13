@@ -1,6 +1,7 @@
 import { getProductos, getProveedores, getListasPrecioGlobales } from "@/app/actions/productos";
 import { getDepositos } from "@/app/actions/configuracion";
 import { getClientSession } from "@/app/actions/auth";
+import { obtenerConfiguracionGlobal } from "@/app/actions/ventas";
 import { StockTable } from "@/components/stock-table";
 import { ProductoColumn } from "@/components/stock-table";
 import { Package } from "lucide-react";
@@ -11,6 +12,7 @@ export default async function InventarioPage() {
   const listasGlobales = await getListasPrecioGlobales();
   const depositos = await getDepositos();
   const session = await getClientSession();
+  const configGlobal = await obtenerConfiguracionGlobal();
 
   const proveedores = proveedoresRaw.map((p: any) => p.nombre);
 
@@ -52,7 +54,7 @@ export default async function InventarioPage() {
         </div>
       </div>
 
-      <StockTable data={data} proveedores={proveedores} listasGlobales={listasGlobales} depositos={depositos} usuarioId={(session as any)?.id as number} />
+      <StockTable data={data} proveedores={proveedores} listasGlobales={listasGlobales} depositos={depositos} usuarioId={(session as any)?.id as number} configGlobal={configGlobal} />
     </div>
   );
 }

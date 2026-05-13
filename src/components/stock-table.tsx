@@ -63,7 +63,8 @@ export type ProductoColumn = {
 export const getColumns = (
   listasGlobales: any[],
   handleAbrirEdicion: (prod: any) => void,
-  handleAbrirHistorial: (prod: any) => void
+  handleAbrirHistorial: (prod: any) => void,
+  configGlobal: any
 ): ColumnDef<ProductoColumn>[] => {
   const baseColumns: ColumnDef<ProductoColumn>[] = [
     {
@@ -158,7 +159,8 @@ export const getColumns = (
         row.original.aumento_proveedor || 0,
         row.original.aumento_marca || 0,
         row.original.aumento_categoria || 0,
-        margenFinal
+        margenFinal,
+        configGlobal?.redondear_a_cinco
       );
 
       return <div className="text-right font-bold whitespace-nowrap text-slate-700 dark:text-slate-300">{formatCurrency(precioFinal, row.original.moneda)}</div>;
@@ -214,9 +216,10 @@ interface StockTableProps {
   listasGlobales: any[];
   depositos: any[];
   usuarioId?: number;
+  configGlobal?: any;
 }
 
-export function StockTable({ data, proveedores, listasGlobales, depositos, usuarioId }: StockTableProps) {
+export function StockTable({ data, proveedores, listasGlobales, depositos, usuarioId, configGlobal }: StockTableProps) {
   const [isPending, startTransition] = useTransition();
 
   const [productoEditando, setProductoEditando] = useState<any | null>(null);
@@ -276,7 +279,7 @@ export function StockTable({ data, proveedores, listasGlobales, depositos, usuar
     }
   };
 
-  const columns = React.useMemo(() => getColumns(listasGlobales, handleAbrirEdicion, handleAbrirHistorial), [listasGlobales]);
+  const columns = React.useMemo(() => getColumns(listasGlobales, handleAbrirEdicion, handleAbrirHistorial, configGlobal), [listasGlobales, configGlobal]);
 
   const table = useReactTable({
     data, columns,
