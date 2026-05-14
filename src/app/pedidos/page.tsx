@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { obtenerTodosLosPedidos, cambiarEstadoPedidoAdmin, editarPedidoAdmin } from "@/app/actions/pedidos";
+import { obtenerTodosLosPedidos, cambiarEstadoPedidoAdmin, editarPedidoAdmin, recalcularPreciosPendientes } from "@/app/actions/pedidos";
 import { buscarProductos, obtenerConfiguracionGlobal } from "@/app/actions/ventas";
 import { redondearPrecio } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Search, ClipboardList, CheckCircle2, Ban, Receipt, User, Clock, Package, X, FileText, CreditCard, Edit, Calendar, Plus, Minus } from "lucide-react";
+import { Search, ClipboardList, CheckCircle2, Ban, Receipt, User, Clock, Package, X, FileText, CreditCard, Edit, Calendar, Plus, Minus, RefreshCw } from "lucide-react";
 
 export default function AdminPedidosPage() {
     const [pedidos, setPedidos] = useState<any[]>([]);
@@ -182,6 +182,25 @@ export default function AdminPedidosPage() {
         setCargando(false);
     };
 
+    const handleRecalcularPendientes = async () => {
+        if (!confirm("¿Estás seguro? Se recalcularán los costos, márgenes y redondeos de todos los pedidos PENDIENTES según las listas de precio actuales. Esto no afectará pedidos aprobados o facturados.")) return;
+
+        setCargando(true);
+        const toastId = toast.loading("Recalculando precios pendientes...");
+        
+        const res = await recalcularPreciosPendientes();
+        if (res.success) {
+            toast.success(`Se actualizaron ${res.count} pedidos pendientes.`, { id: toastId });
+            await cargarPedidos();
+            if (pedidoActivo && pedidoActivo.estado === 'PENDIENTE') {
+                setPedidoActivo(null);
+            }
+        } else {
+            toast.error(res.error, { id: toastId });
+        }
+        setCargando(false);
+    };
+
     const abrirModalFacturar = () => {
         // Pre-seleccionar tipo de comprobante basado en el cliente
         const condicion = pedidoActivo?.cliente?.condicion_iva || "CONSUMIDOR_FINAL";
@@ -220,9 +239,14 @@ export default function AdminPedidosPage() {
             {/* PANEL IZQUIERDO: LISTA DE PEDIDOS */}
             <div className="w-full md:w-1/3 flex flex-col h-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-                    <h2 className="font-black text-lg text-slate-800 flex items-center mb-4">
-                        <ClipboardList className="mr-2 h-5 w-5 text-indigo-600" /> Recepción de Pedidos
-                    </h2>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="font-black text-lg text-slate-800 flex items-center">
+                            <ClipboardList className="mr-2 h-5 w-5 text-indigo-600" /> Recepción de Pedidos
+                        </h2>
+                        <Button variant="outline" size="sm" onClick={handleRecalcularPendientes} disabled={cargando} className="text-[10px] h-7 px-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold tracking-tight">
+                            <RefreshCw className={`h-3 w-3 mr-1 ${cargando ? 'animate-spin' : ''}`} /> Actualizar Precios
+                        </Button>
+                    </div>
 
                     {/* Botonera Filtros Rápidos */}
                     <div className="flex gap-2 mb-3 overflow-x-auto pb-1 hide-scrollbar">

@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getClientSession } from "./auth";
 import { emitirComprobanteAFIP } from "./afip";
+import { calcularPrecioConCascada, redondearPrecio } from "@/lib/utils";
 
 // ============================================================================
 // 1. REGISTRAR NUEVO PEDIDO
@@ -541,3 +542,119 @@ export async function editarPedidoAdmin(
         return { success: false, error: error.message || "Error desconocido al editar." };
     }
 }
+
+// ============================================================================
+// 6. RECALCULAR PRECIOS DE PEDIDOS PENDIENTES
+// ============================================================================
+export async function recalcularPreciosPendientes() {
+    try {
+        const resultado = await prisma.$transaction(async (tx) => {
+            // Obtener configuración global de redondeo
+            const config = await tx.empresaConfig.findFirst();
+            const redondearA5 = config?.redondear_a_cinco || false;
+
+            // Obtener todos los pedidos PENDIENTES con sus detalles y productos
+            const pedidosPendientes = await tx.pedido.findMany({
+                where: { estado: 'PENDIENTE' },
+                include: {
+                    listaPrecio: true,
+                    detalles: {
+                        include: {
+                            producto: {
+                                include: {
+                                    proveedor: true,
+                                    marca: true,
+                                    categoria: true,
+                                    listas_precios: true
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (pedidosPendientes.length === 0) {
+                return { count: 0 };
+            }
+
+            let actualizados = 0;
+
+            for (const pedido of pedidosPendientes) {
+                let nuevoSubtotalPedido = 0;
+
+                for (const detalle of pedido.detalles) {
+                    const prod = detalle.producto;
+                    const listaIDNum = pedido.listaPrecioId;
+
+                    // Buscar margen
+                    const pivot = prod.listas_precios?.find((p: any) => p.listaPrecioId === listaIDNum);
+                    const margenFinal = pivot?.margen_personalizado ?? pedido.listaPrecio.margen_defecto;
+
+                    // Aumentos
+                    const aumProv = prod.proveedor?.aumento_porcentaje || 0;
+                    const aumMarca = prod.marca?.aumento_porcentaje || 0;
+                    const aumCat = prod.categoria?.aumento_porcentaje || 0;
+
+                    // Calcular nuevo precio base
+                    const nuevoPrecioBase = calcularPrecioConCascada(
+                        prod.precio_costo,
+                        prod.descuento_proveedor || 0,
+                        prod.alicuota_iva || 21,
+                        aumProv,
+                        aumMarca,
+                        aumCat,
+                        margenFinal,
+                        redondearA5
+                    );
+
+                    // Aplicar descuento individual existente en el detalle
+                    const sinRedondearIndividual = nuevoPrecioBase * (1 - detalle.descuento_individual / 100);
+                    const nuevoPrecioFinal = Number(redondearPrecio(sinRedondearIndividual, redondearA5).toFixed(2));
+                    const nuevoSubtotalDetalle = nuevoPrecioFinal * detalle.cantidad;
+
+                    nuevoSubtotalPedido += nuevoSubtotalDetalle;
+
+                    // Actualizar el detalle
+                    await tx.detallePedido.update({
+                        where: { id: detalle.id },
+                        data: {
+                            precio_unitario: nuevoPrecioBase,
+                            precio_final: nuevoPrecioFinal,
+                            subtotal: nuevoSubtotalDetalle
+                        }
+                    });
+                }
+
+                // El descuento global del pedido se mantiene como un monto fijo (pedido.descuento_global)
+                // Ojo: Si el cliente quisiera recalcular un % global, habría que guardar el % original, 
+                // pero actualmente es un valor fijo (Float). Lo restamos directamente.
+                const nuevoTotalPedido = nuevoSubtotalPedido - pedido.descuento_global;
+
+                const fechaHora = new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+                
+                await tx.pedido.update({
+                    where: { id: pedido.id },
+                    data: {
+                        subtotal: nuevoSubtotalPedido,
+                        total: nuevoTotalPedido,
+                        notas: (pedido.notas || "") + `\n\n[SISTEMA ${fechaHora}] -> Precios recalculados masivamente.`
+                    }
+                });
+
+                actualizados++;
+            }
+
+            return { count: actualizados };
+        }, {
+            maxWait: 15000,
+            timeout: 60000 // Aumentado por si hay muchos pedidos
+        });
+
+        revalidatePath("/pedidos");
+        return { success: true, count: resultado.count };
+
+    } catch (error: any) {
+        console.error("Error al recalcular precios:", error);
+        return { success: false, error: error.message || "Error al recalcular precios." };
+    }
+}
