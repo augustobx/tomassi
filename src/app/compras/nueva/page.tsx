@@ -23,7 +23,7 @@ export default async function NuevaCompraPage() {
   const categorias = await prisma.categoria.findMany({ select: { id: true, nombre: true }, orderBy: { nombre: 'asc' } });
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-6 w-full">
       <div className="flex items-center gap-3">
         <div className="p-3 bg-indigo-100 dark:bg-indigo-900/50 rounded-xl">
           <PackagePlus className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
