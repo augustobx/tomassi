@@ -15,7 +15,12 @@ type Producto = {
   nombre_producto: string;
   codigo_articulo: string;
   precio_costo: number;
+  proveedor?: { id: number; nombre: string } | null;
+  marca?: { id: number; nombre: string } | null;
+  categoria?: { id: number; nombre: string } | null;
 };
+
+type ItemFiltro = { id: number; nombre: string };
 
 type ImpuestoRow = {
   id: string;
@@ -24,7 +29,17 @@ type ImpuestoRow = {
   valor: number;
 };
 
-export function CompraForm({ productos }: { productos: Producto[] }) {
+export function CompraForm({ 
+  productos,
+  proveedores = [],
+  marcas = [],
+  categorias = []
+}: { 
+  productos: Producto[],
+  proveedores?: ItemFiltro[],
+  marcas?: ItemFiltro[],
+  categorias?: ItemFiltro[]
+}) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -35,18 +50,35 @@ export function CompraForm({ productos }: { productos: Producto[] }) {
   const [notas, setNotas] = useState("");
   const [impuestos, setImpuestos] = useState<ImpuestoRow[]>([]);
 
-  // Search product state
+  // Search and Filter states
   const [searchTerm, setSearchTerm] = useState("");
+  const [proveedorFilter, setProveedorFilter] = useState("");
+  const [marcaFilter, setMarcaFilter] = useState("");
+  const [categoriaFilter, setCategoriaFilter] = useState("");
 
   const filteredProductos = useMemo(() => {
-    if (!searchTerm) return productos.slice(0, 50); // Limit to 50 if no search
-    const lower = searchTerm.toLowerCase();
-    return productos.filter(
-      (p) =>
-        p.nombre_producto.toLowerCase().includes(lower) ||
-        p.codigo_articulo.toLowerCase().includes(lower)
-    ).slice(0, 50);
-  }, [productos, searchTerm]);
+    let filtrados = productos;
+    
+    if (proveedorFilter) {
+      filtrados = filtrados.filter(p => p.proveedor?.id.toString() === proveedorFilter);
+    }
+    if (marcaFilter) {
+      filtrados = filtrados.filter(p => p.marca?.id.toString() === marcaFilter);
+    }
+    if (categoriaFilter) {
+      filtrados = filtrados.filter(p => p.categoria?.id.toString() === categoriaFilter);
+    }
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      filtrados = filtrados.filter(
+        (p) =>
+          p.nombre_producto.toLowerCase().includes(lower) ||
+          p.codigo_articulo.toLowerCase().includes(lower)
+      );
+    }
+    
+    return filtrados.slice(0, 100); // Limit to 100 for performance
+  }, [productos, searchTerm, proveedorFilter, marcaFilter, categoriaFilter]);
 
   const selectedProduct = productos.find(p => p.id.toString() === productoId);
 
@@ -184,19 +216,54 @@ export function CompraForm({ productos }: { productos: Producto[] }) {
 
               <div className="space-y-3">
                 <Label>Seleccionar Producto</Label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-                  <Input
-                    placeholder="Buscar por nombre o código..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 mb-2 border-slate-200"
-                  />
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2">
+                  <div className="relative md:col-span-2">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                    <Input
+                      placeholder="Buscar producto..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-9 border-slate-200"
+                    />
+                  </div>
+                  
+                  <select 
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={proveedorFilter}
+                    onChange={(e) => setProveedorFilter(e.target.value)}
+                  >
+                    <option value="">Todos los Proveedores</option>
+                    {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  </select>
+
+                  <select 
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={marcaFilter}
+                    onChange={(e) => setMarcaFilter(e.target.value)}
+                  >
+                    <option value="">Todas las Marcas</option>
+                    {marcas.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                  </select>
+
+                  {/* Opcional: Filtro Categoria si se quisiera 
+                  <select 
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={categoriaFilter}
+                    onChange={(e) => setCategoriaFilter(e.target.value)}
+                  >
+                    <option value="">Categorías</option>
+                    {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                  */}
                 </div>
                 
-                <div className="border border-slate-200 rounded-lg max-h-60 overflow-y-auto bg-slate-50/50">
+                <div className="border border-slate-200 rounded-lg h-96 overflow-y-auto bg-slate-50/50">
                   {filteredProductos.length === 0 ? (
-                    <div className="p-4 text-center text-sm text-slate-500">No se encontraron productos</div>
+                    <div className="p-8 text-center text-slate-500">
+                      <p className="font-medium">No se encontraron productos</p>
+                      <p className="text-xs">Intenta cambiar los filtros de búsqueda</p>
+                    </div>
                   ) : (
                     <div className="p-1 space-y-1">
                       {filteredProductos.map((p) => (
@@ -209,13 +276,22 @@ export function CompraForm({ productos }: { productos: Producto[] }) {
                               : "hover:bg-slate-100 bg-white border border-transparent"
                           }`}
                         >
-                          <div>
-                            <p className="text-sm">{p.nombre_producto}</p>
-                            <p className="text-xs text-slate-500">Cód: {p.codigo_articulo}</p>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-slate-800">{p.nombre_producto}</p>
+                            <div className="flex gap-2 text-xs text-slate-500 mt-0.5">
+                              <span>Cód: {p.codigo_articulo}</span>
+                              {p.proveedor && <span>• Prov: {p.proveedor.nombre}</span>}
+                              {p.marca && <span>• Marca: {p.marca.nombre}</span>}
+                            </div>
                           </div>
-                          <span className="text-sm font-bold text-slate-600">
-                            Costo actual: ${p.precio_costo.toFixed(2)}
-                          </span>
+                          <div className="text-right ml-4">
+                            <span className="text-sm font-bold text-slate-600 block">
+                              Costo actual
+                            </span>
+                            <span className="text-sm font-black text-emerald-600">
+                              ${p.precio_costo.toFixed(2)}
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>

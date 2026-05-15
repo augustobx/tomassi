@@ -4,19 +4,23 @@ import prisma from "@/lib/prisma";
 
 export default async function NuevaCompraPage() {
   const productos = await prisma.producto.findMany({
-    where: {
-      // solo activos o sin filtro si no hay flag de activo
-    },
     select: {
       id: true,
       nombre_producto: true,
       codigo_articulo: true,
       precio_costo: true,
+      proveedor: { select: { id: true, nombre: true } },
+      marca: { select: { id: true, nombre: true } },
+      categoria: { select: { id: true, nombre: true } },
     },
     orderBy: {
       nombre_producto: "asc"
     }
   });
+
+  const proveedores = await prisma.proveedor.findMany({ select: { id: true, nombre: true }, orderBy: { nombre: 'asc' } });
+  const marcas = await prisma.marca.findMany({ select: { id: true, nombre: true }, orderBy: { nombre: 'asc' } });
+  const categorias = await prisma.categoria.findMany({ select: { id: true, nombre: true }, orderBy: { nombre: 'asc' } });
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -32,7 +36,12 @@ export default async function NuevaCompraPage() {
         </div>
       </div>
 
-      <CompraForm productos={productos} />
+      <CompraForm 
+        productos={productos} 
+        proveedores={proveedores} 
+        marcas={marcas} 
+        categorias={categorias} 
+      />
     </div>
   );
 }
