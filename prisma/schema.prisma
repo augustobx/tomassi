@@ -89,6 +89,7 @@ model Producto {
   historial_inventario HistorialInventario[]
   historial_precios    HistorialPrecio[]
   DetallePedido        DetallePedido[]
+  compras              Compra[]
 }
 
 enum TipoMedicion {
@@ -635,5 +636,34 @@ enum EstadoPedido {
   APROBADO
   RECHAZADO
   FACTURADO
-  CANCELADO
+}
+
+// ==========================================
+// MÓDULO DE COMPRAS (HISTORIAL Y CARGA)
+// ==========================================
+
+model Compra {
+  id             Int       @id @default(autoincrement())
+  fecha          DateTime  @default(now())
+  
+  productoId     Int
+  producto       Producto  @relation(fields: [productoId], references: [id])
+  
+  costo_base     Float
+  costo_final    Float
+  notas          String?   @db.Text
+  
+  impuestos      CompraImpuesto[]
+  
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model CompraImpuesto {
+  id             Int       @id @default(autoincrement())
+  compraId       Int
+  compra         Compra    @relation(fields: [compraId], references: [id], onDelete: Cascade)
+  nombre         String
+  porcentaje     Float?
+  monto          Float
 }

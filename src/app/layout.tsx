@@ -18,7 +18,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 // METADATA ACTUALIZADA PARA PWA
 export const metadata: Metadata = {
-  title: "SellPoint",
+  title: "Sanu Distribuidora",
   description: "Sistema de Gestión y Facturación",
   manifest: "/manifest.json",
 };
@@ -192,6 +192,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                         </Link>
                         <Link href="/proveedores" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
                           <Building2 className="h-4 w-4 opacity-70" /> Marcas y Proveedores
+                        </Link>
+                        <Link href="/compras" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+                          <Wallet className="h-4 w-4 opacity-70" /> Compras y Gastos
                         </Link>
                       </>
                     )}
