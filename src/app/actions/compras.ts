@@ -118,3 +118,21 @@ export async function getHistorialCompras(filtros?: {
     return [];
   }
 }
+
+export async function getUltimaCompra(productoId: number) {
+  try {
+    const ultima = await prisma.compra.findFirst({
+      where: { productoId },
+      include: {
+        impuestos: true,
+      },
+      orderBy: {
+        fecha: "desc",
+      },
+    });
+    return ultima;
+  } catch (error) {
+    console.error("Error al obtener ultima compra:", error);
+    return null;
+  }
+}

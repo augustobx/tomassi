@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { registrarCompra } from "@/app/actions/compras";
+import { registrarCompra, getUltimaCompra } from "@/app/actions/compras";
 
 type Producto = {
   id: number;
@@ -66,6 +66,27 @@ export function CompraForm({ productos }: { productos: Producto[] }) {
 
   const removeImpuesto = (id: string) => {
     setImpuestos(impuestos.filter((imp) => imp.id !== id));
+  };
+
+  const handleProductSelect = async (id: string) => {
+    setProductoId(id);
+    const ultima = await getUltimaCompra(parseInt(id));
+    
+    if (ultima) {
+      setCostoBase(ultima.costo_base);
+      setImpuestos(ultima.impuestos.map((imp: any) => ({
+        id: Math.random().toString(36).substr(2, 9),
+        nombre: imp.nombre,
+        esPorcentaje: imp.porcentaje !== null && imp.porcentaje !== undefined,
+        valor: imp.porcentaje !== null && imp.porcentaje !== undefined ? imp.porcentaje : imp.monto,
+      })));
+      toast.info("Costo e impuestos de la última compra cargados automáticamente.");
+    } else {
+      // Si no tiene compras previas, pre-cargamos el precio costo actual como sugerencia (aunque esté con impuestos, es una guía) y dejamos impuestos vacíos
+      const prod = productos.find(p => p.id.toString() === id);
+      setCostoBase(prod ? prod.precio_costo : 0);
+      setImpuestos([]);
+    }
   };
 
   // Calculations
@@ -181,7 +202,7 @@ export function CompraForm({ productos }: { productos: Producto[] }) {
                       {filteredProductos.map((p) => (
                         <div
                           key={p.id}
-                          onClick={() => setProductoId(p.id.toString())}
+                          onClick={() => handleProductSelect(p.id.toString())}
                           className={`p-3 rounded-md cursor-pointer transition-colors flex justify-between items-center ${
                             productoId === p.id.toString() 
                               ? "bg-indigo-100 border-indigo-200 text-indigo-900 font-medium" 
