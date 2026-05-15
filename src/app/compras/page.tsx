@@ -1,5 +1,4 @@
 import { getHistorialCompras } from "@/app/actions/compras";
-import { format } from "date-fns";
 import { PlusCircle, Search, Wallet } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -71,7 +70,13 @@ export default async function ComprasPage() {
                   {compras.map((compra) => (
                     <TableRow key={compra.id} className="hover:bg-slate-50/50 transition-colors">
                       <TableCell className="font-medium text-slate-700">
-                        {format(new Date(compra.fecha), "dd/MM/yyyy HH:mm")}
+                        {new Date(compra.fecha).toLocaleDateString("es-AR", { 
+                          day: "2-digit", 
+                          month: "2-digit", 
+                          year: "numeric", 
+                          hour: "2-digit", 
+                          minute: "2-digit" 
+                        })}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">

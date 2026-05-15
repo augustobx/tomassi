@@ -636,6 +636,7 @@ enum EstadoPedido {
   APROBADO
   RECHAZADO
   FACTURADO
+  CANCELADO
 }
 
 // ==========================================
