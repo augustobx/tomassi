@@ -21,6 +21,7 @@ export default async function NuevaCompraPage() {
   const proveedores = await prisma.proveedor.findMany({ select: { id: true, nombre: true }, orderBy: { nombre: 'asc' } });
   const marcas = await prisma.marca.findMany({ select: { id: true, nombre: true }, orderBy: { nombre: 'asc' } });
   const categorias = await prisma.categoria.findMany({ select: { id: true, nombre: true }, orderBy: { nombre: 'asc' } });
+  const depositos = await prisma.deposito.findMany({ where: { estado: true }, select: { id: true, nombre: true } });
 
   return (
     <div className="space-y-6 w-full">
@@ -41,6 +42,7 @@ export default async function NuevaCompraPage() {
         proveedores={proveedores} 
         marcas={marcas} 
         categorias={categorias} 
+        depositos={depositos}
       />
     </div>
   );

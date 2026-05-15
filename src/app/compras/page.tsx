@@ -99,6 +99,7 @@ export default function ComprasPage() {
               <tr>
                 <th className="px-6 py-4 font-semibold">Fecha y Hora</th>
                 <th className="px-6 py-4 font-semibold">Producto</th>
+                <th className="px-6 py-4 font-semibold text-center">Cant.</th>
                 <th className="px-6 py-4 font-semibold">Costo Base</th>
                 <th className="px-6 py-4 font-semibold">Impuestos</th>
                 <th className="px-6 py-4 font-semibold text-right">Costo Final</th>
@@ -129,6 +130,9 @@ export default function ComprasPage() {
                     <td className="px-6 py-4">
                       <p className="font-bold text-sm text-slate-900 dark:text-white line-clamp-1">{v.producto.nombre_producto}</p>
                       <p className="text-[11px] text-slate-500 mt-0.5">Cód: {v.producto.codigo_articulo}</p>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <p className="font-medium text-slate-700">{v.cantidad > 0 ? v.cantidad : "-"}</p>
                     </td>
                     <td className="px-6 py-4">
                       <p className="font-medium text-slate-700">${v.costo_base.toFixed(2)}</p>
@@ -178,8 +182,18 @@ export default function ComprasPage() {
             <div className="p-6 overflow-y-auto">
               <div className="mb-6 p-4 bg-slate-50 border border-slate-100 rounded-xl">
                 <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Producto Adquirido</p>
-                <p className="text-lg font-black text-slate-800">{compraSeleccionada.producto.nombre_producto}</p>
-                <p className="text-sm text-slate-500">Cód: {compraSeleccionada.producto.codigo_articulo}</p>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-lg font-black text-slate-800">{compraSeleccionada.producto.nombre_producto}</p>
+                    <p className="text-sm text-slate-500">Cód: {compraSeleccionada.producto.codigo_articulo}</p>
+                  </div>
+                  {compraSeleccionada.cantidad > 0 && (
+                    <div className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-lg text-center">
+                      <p className="text-[10px] font-bold uppercase opacity-80">Cantidad</p>
+                      <p className="text-lg font-black">{compraSeleccionada.cantidad}</p>
+                    </div>
+                  )}
+                </div>
                 {compraSeleccionada.notas && (
                   <div className="mt-4 pt-4 border-t border-slate-200">
                     <p className="text-sm text-slate-600 whitespace-pre-wrap"><strong>Notas:</strong> {compraSeleccionada.notas}</p>

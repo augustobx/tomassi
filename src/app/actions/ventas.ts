@@ -70,14 +70,26 @@ export async function buscarProductos(query: string) {
             stocks: { include: { deposito: true } },
             marca: { select: { id: true, nombre: true } },
             categoria: { select: { id: true, nombre: true } },
+            DetallePedido: {
+                where: {
+                    pedido: { estado: { in: ["PENDIENTE", "APROBADO"] } }
+                },
+                select: { cantidad: true }
+            }
         },
         take: 100 // Límite para rendimiento en celulares
     });
 
-    return productos.map(p => ({
-        ...p,
-        stock_actual: p.stocks.reduce((acc: any, current: any) => acc + current.cantidad, 0)
-    }));
+    return productos.map(p => {
+        const stockFisico = p.stocks.reduce((acc: any, current: any) => acc + current.cantidad, 0);
+        const stockComprometido = p.DetallePedido ? p.DetallePedido.reduce((acc: any, current: any) => acc + current.cantidad, 0) : 0;
+        return {
+            ...p,
+            stock_actual: stockFisico - stockComprometido,
+            stock_fisico: stockFisico,
+            stock_comprometido: stockComprometido
+        };
+    });
 }
 
 // ==========================================

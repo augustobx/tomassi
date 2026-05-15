@@ -652,6 +652,8 @@ model Compra {
   
   costo_base     Float
   costo_final    Float
+  cantidad       Float     @default(0)
+  depositoId     Int?
   notas          String?   @db.Text
   
   impuestos      CompraImpuesto[]

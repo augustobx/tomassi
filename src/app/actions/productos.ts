@@ -203,16 +203,28 @@ export async function getProductos() {
             listaPrecio: true,
           }
         },
+        DetallePedido: {
+          where: {
+            pedido: { estado: { in: ["PENDIENTE", "APROBADO"] } }
+          },
+          select: { cantidad: true }
+        }
       },
       orderBy: {
         createdAt: "desc",
       },
     });
 
-    return productos.map(p => ({
-      ...p,
-      stock_actual: p.stocks.reduce((acc, current) => acc + current.cantidad, 0)
-    }));
+    return productos.map(p => {
+      const stockFisico = p.stocks.reduce((acc, current) => acc + current.cantidad, 0);
+      const stockComprometido = p.DetallePedido ? p.DetallePedido.reduce((acc, current) => acc + current.cantidad, 0) : 0;
+      return {
+        ...p,
+        stock_actual: stockFisico - stockComprometido,
+        stock_fisico: stockFisico,
+        stock_comprometido: stockComprometido
+      };
+    });
   } catch (error) {
     console.error("Error fetching products:", error);
     return [];
@@ -239,14 +251,25 @@ export async function getProductoById(id: number) {
             listaPrecio: true,
           }
         },
+        DetallePedido: {
+          where: {
+            pedido: { estado: { in: ["PENDIENTE", "APROBADO"] } }
+          },
+          select: { cantidad: true }
+        }
       },
     });
 
     if (!producto) return null;
 
+    const stockFisico = producto.stocks.reduce((acc, current) => acc + current.cantidad, 0);
+    const stockComprometido = producto.DetallePedido ? producto.DetallePedido.reduce((acc, current) => acc + current.cantidad, 0) : 0;
+
     return {
       ...producto,
-      stock_actual: producto.stocks.reduce((acc, current) => acc + current.cantidad, 0)
+      stock_actual: stockFisico - stockComprometido,
+      stock_fisico: stockFisico,
+      stock_comprometido: stockComprometido
     };
   } catch (error) {
     console.error("Error fetching product:", error);

@@ -33,12 +33,14 @@ export function CompraForm({
   productos,
   proveedores = [],
   marcas = [],
-  categorias = []
+  categorias = [],
+  depositos = []
 }: { 
   productos: Producto[],
   proveedores?: ItemFiltro[],
   marcas?: ItemFiltro[],
-  categorias?: ItemFiltro[]
+  categorias?: ItemFiltro[],
+  depositos?: ItemFiltro[]
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -47,6 +49,8 @@ export function CompraForm({
   const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
   const [productoId, setProductoId] = useState("");
   const [costoBase, setCostoBase] = useState<number>(0);
+  const [cantidad, setCantidad] = useState<number>(1);
+  const [depositoId, setDepositoId] = useState<string>(depositos.length > 0 ? depositos[0].id.toString() : "");
   const [notas, setNotas] = useState("");
   const [impuestos, setImpuestos] = useState<ImpuestoRow[]>([]);
 
@@ -155,6 +159,8 @@ export function CompraForm({
       productoId: parseInt(productoId),
       costo_base: costoBase,
       costo_final: costoFinal,
+      cantidad,
+      depositoId: depositoId ? parseInt(depositoId) : undefined,
       notas,
       impuestos: calculatedImpuestos.map(imp => ({
         nombre: imp.nombre,
@@ -185,32 +191,58 @@ export function CompraForm({
               <CardTitle className="text-lg font-bold text-slate-700">Datos Principales</CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Fecha de Compra</Label>
-                  <Input 
-                    type="date" 
-                    value={fecha} 
-                    onChange={(e) => setFecha(e.target.value)}
-                    required
-                    className="border-slate-200 focus-visible:ring-indigo-500"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Costo Base (Sin Impuestos)</Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="space-y-2 md:col-span-2 flex flex-col md:flex-row gap-4">
+                  <div className="space-y-2 flex-1">
+                    <Label>Fecha de Compra</Label>
                     <Input 
-                      type="number" 
-                      step="0.01"
-                      min="0"
-                      value={costoBase || ""} 
-                      onChange={(e) => setCostoBase(parseFloat(e.target.value) || 0)}
+                      type="date" 
+                      value={fecha} 
+                      onChange={(e) => setFecha(e.target.value)}
                       required
-                      className="pl-8 border-slate-200 focus-visible:ring-indigo-500 font-bold text-lg"
-                      placeholder="0.00"
+                      className="border-slate-200 focus-visible:ring-indigo-500"
                     />
                   </div>
+                  <div className="space-y-2 flex-1">
+                    <Label>Costo Base (Sin Impuestos)</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+                      <Input 
+                        type="number" 
+                        step="0.01"
+                        min="0"
+                        value={costoBase || ""} 
+                        onChange={(e) => setCostoBase(parseFloat(e.target.value) || 0)}
+                        required
+                        className="pl-8 border-slate-200 focus-visible:ring-indigo-500 font-bold text-lg"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Cantidad (Stock)</Label>
+                  <Input 
+                    type="number" 
+                    step="0.01"
+                    min="0"
+                    value={cantidad || ""} 
+                    onChange={(e) => setCantidad(parseFloat(e.target.value) || 0)}
+                    className="border-slate-200 focus-visible:ring-indigo-500"
+                    placeholder="Ej: 10"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Depósito Destino</Label>
+                  <select
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={depositoId}
+                    onChange={(e) => setDepositoId(e.target.value)}
+                  >
+                    <option value="">No ingresar stock</option>
+                    {depositos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                  </select>
                 </div>
               </div>
 

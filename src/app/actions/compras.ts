@@ -14,7 +14,8 @@ export type CompraData = {
     porcentaje?: number;
     monto: number;
   }[];
-  // Optionals if needed: actualizarCosto?: boolean
+  cantidad?: number;
+  depositoId?: number;
 };
 
 export async function registrarCompra(data: CompraData) {
@@ -28,6 +29,8 @@ export async function registrarCompra(data: CompraData) {
         productoId,
         costo_base,
         costo_final,
+        cantidad: data.cantidad || 0,
+        depositoId: data.depositoId,
         notas,
         impuestos: {
           create: impuestos.map((imp) => ({
@@ -38,6 +41,39 @@ export async function registrarCompra(data: CompraData) {
         },
       },
     });
+
+    // 1.5 Update Stock if cantidad and depositoId are provided
+    if (data.cantidad && data.cantidad > 0 && data.depositoId) {
+      // Create MovimientoStock
+      await prisma.movimientoStock.create({
+        data: {
+          productoId,
+          depositoDestinoId: data.depositoId,
+          cantidad: data.cantidad,
+          tipo: "INGRESO_COMPRA",
+          motivo: `Ingreso por compra #${compra.id}`,
+          fecha: new Date(fecha)
+        }
+      });
+
+      // Update StockUbicacion
+      await prisma.stockUbicacion.upsert({
+        where: {
+          productoId_depositoId: {
+            productoId,
+            depositoId: data.depositoId
+          }
+        },
+        update: {
+          cantidad: { increment: data.cantidad }
+        },
+        create: {
+          productoId,
+          depositoId: data.depositoId,
+          cantidad: data.cantidad
+        }
+      });
+    }
 
     // 2. Update the product's precio_costo
     const producto = await prisma.producto.findUnique({
