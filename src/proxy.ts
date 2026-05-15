@@ -16,7 +16,7 @@ const RUTAS_MODULOS: Record<string, string> = {
     '/configuracion': 'CONFIGURACION'
 };
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     // 1. Dejar pasar archivos del sistema, imágenes, y la página de login libremente.
