@@ -5,7 +5,7 @@ import { buscarClientes, buscarProductos, obtenerListasPrecio, obtenerMarcas, ob
 import { registrarPedidoPWA, obtenerPedidosVendedor, accionarPedidoVendedor } from "@/app/actions/pedidos";
 import { registrarClientePWA } from "@/app/actions/clientes";
 import { guardarOffline, obtenerTodosOffline, eliminarOffline, STORE_PEDIDOS, STORE_CLIENTES } from "@/lib/offline-db";
-import { redondearPrecio } from "@/lib/utils";
+import { redondearPrecio, calcularPrecioConCascada } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -143,12 +143,24 @@ export default function PwaVendedor() {
     // LÓGICA DE PRECIOS Y CARRITO
     // ==========================================
     const calcularPrecioBase = (producto: any, listaId: number) => {
-        const precioCostoIva = producto.precio_costo * (1 + (producto.alicuota_iva / 100));
         let margen = listas.find(l => l.id === listaId)?.margen_defecto || 0;
         const pivot = producto.listas_precios?.find((lp: any) => lp.listaPrecioId === listaId);
         if (pivot && pivot.margen_personalizado !== null) margen = pivot.margen_personalizado;
-        const precioSinRedondear = precioCostoIva * (1 + (margen / 100));
-        return redondearPrecio(precioSinRedondear, configuracionGlobal.redondear_a_cinco);
+        
+        const aumProv = producto.proveedor?.aumento_porcentaje || 0;
+        const aumMarca = producto.marca?.aumento_porcentaje || 0;
+        const aumCat = producto.categoria?.aumento_porcentaje || 0;
+
+        return calcularPrecioConCascada(
+            producto.precio_costo,
+            producto.descuento_proveedor || 0,
+            producto.alicuota_iva || 21,
+            aumProv,
+            aumMarca,
+            aumCat,
+            margen,
+            configuracionGlobal.redondear_a_cinco
+        );
     };
 
     const handleClienteSelect = (c: any) => {
@@ -209,7 +221,10 @@ export default function PwaVendedor() {
         item.subtotal = item.precio_final * item.cantidad;
     };
 
-    const total = carrito.reduce((acc, item) => acc + item.subtotal, 0);
+    let total = carrito.reduce((acc, item) => acc + item.subtotal, 0);
+    if (configuracionGlobal.redondear_a_cinco) {
+        total = Math.round(total / 5) * 5;
+    }
 
     // ==========================================
     // ACCIONES DE BASE DE DATOS (CON MODO OFFLINE)

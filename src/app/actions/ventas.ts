@@ -68,8 +68,9 @@ export async function buscarProductos(query: string) {
         include: {
             listas_precios: { include: { listaPrecio: true } },
             stocks: { include: { deposito: true } },
-            marca: { select: { id: true, nombre: true } },
-            categoria: { select: { id: true, nombre: true } },
+            marca: { select: { id: true, nombre: true, aumento_porcentaje: true } },
+            categoria: { select: { id: true, nombre: true, aumento_porcentaje: true } },
+            proveedor: { select: { id: true, nombre: true, aumento_porcentaje: true } },
             DetallePedido: {
                 where: {
                     pedido: { estado: { in: ["PENDIENTE", "APROBADO"] } }

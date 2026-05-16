@@ -119,7 +119,10 @@ export default function NuevoPresupuestoPage() {
 
     const subtotalCarrito = carrito.reduce((acc, i) => acc + i.subtotal, 0);
     const montoDescuento = subtotalCarrito * (descuentoGlobal / 100);
-    const totalFinal = subtotalCarrito - montoDescuento;
+    let totalFinal = subtotalCarrito - montoDescuento;
+    if (configuracionGlobal.redondear_a_cinco) {
+        totalFinal = Math.round(totalFinal / 5) * 5;
+    }
 
     const handleGuardar = () => {
         if (!clienteSeleccionado) return toast.error("Seleccione un cliente.");
