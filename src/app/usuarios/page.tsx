@@ -27,6 +27,10 @@ const MODULOS_SISTEMA = [
     { id: "CONFIGURACION", nombre: "Configuración", desc: "Cambiar datos de la empresa e impresiones." }
 ];
 
+const MODULOS_VENDEDOR = [
+    { id: "COBRAR_CC", nombre: "Cobranzas en Calle", desc: "Permitir a este vendedor cobrar cuentas corrientes desde la App PWA." }
+];
+
 export default function GestionUsuariosPage() {
     const [isPending, startTransition] = useTransition();
     const [usuarios, setUsuarios] = useState<any[]>([]);
@@ -84,8 +88,7 @@ export default function GestionUsuariosPage() {
         if (sucursalSeleccionada !== "null") formData.append("sucursalId", sucursalSeleccionada);
         formData.append("rol", rolSeleccionado);
 
-        // VENDEDOR no necesita permisos del ERP, solo accede a la PWA
-        const permisosFinales = rolSeleccionado === "VENDEDOR" ? [] : permisosSeleccionados;
+        const permisosFinales = permisosSeleccionados;
 
         startTransition(async () => {
             const res = await guardarUsuario(formData, JSON.stringify(permisosFinales));
@@ -328,15 +331,9 @@ export default function GestionUsuariosPage() {
                                             <p className="font-bold text-slate-700">Modo Dueño</p>
                                             <p className="text-xs text-slate-500 mt-1">Los administradores tienen acceso irrestricto a todos los módulos por defecto.</p>
                                         </div>
-                                    ) : rolSeleccionado === 'VENDEDOR' ? (
-                                        <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-amber-200 rounded-xl p-6 text-center bg-amber-50/30">
-                                            <ShieldCheck className="h-12 w-12 text-amber-400 mb-2" />
-                                            <p className="font-bold text-amber-700">Vendedor PWA</p>
-                                            <p className="text-xs text-amber-600 mt-1">Este usuario solo accederá a la aplicación de toma de pedidos en calle. No necesita permisos del ERP.</p>
-                                        </div>
                                     ) : (
                                         <div className="space-y-2">
-                                            {MODULOS_SISTEMA.map(mod => {
+                                            {(rolSeleccionado === 'VENDEDOR' ? MODULOS_VENDEDOR : MODULOS_SISTEMA).map(mod => {
                                                 const tienePermiso = permisosSeleccionados.includes(mod.id);
                                                 return (
                                                     <div

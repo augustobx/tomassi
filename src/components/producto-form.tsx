@@ -74,6 +74,8 @@ export function ProductoForm({ initialData, providers: initialProviders, categor
   const [codigoArticuloEstado, setCodigoArticuloEstado] = useState<"idle" | "checking" | "valid" | "invalid">("idle");
   const [codigoBarrasEstado, setCodigoBarrasEstado] = useState<"idle" | "checking" | "valid" | "invalid">("idle");
 
+  const [preciosFijosText, setPreciosFijosText] = useState<Record<number, string>>({});
+
   const isEdit = !!initialData;
 
   const form = useForm<any>({
@@ -434,8 +436,19 @@ export function ProductoForm({ initialData, providers: initialProviders, categor
                             type="number" 
                             step="0.01"
                             disabled={!isActive}
-                            value={isActive ? (precioFinal || 0).toFixed(2) : "0.00"}
-                            onChange={(e) => handlePrecioFijoChange(e.target.value)}
+                            value={isActive ? (preciosFijosText[index] !== undefined ? preciosFijosText[index] : (precioFinal || 0).toFixed(2)) : "0.00"}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                setPreciosFijosText(prev => ({ ...prev, [index]: val }));
+                                handlePrecioFijoChange(val);
+                            }}
+                            onBlur={() => {
+                                setPreciosFijosText(prev => {
+                                    const next = { ...prev };
+                                    delete next[index];
+                                    return next;
+                                });
+                            }}
                             className="pl-8 font-bold text-lg text-indigo-600 bg-indigo-50/50 border-indigo-200 focus-visible:ring-indigo-500" 
                           />
                         </div>
