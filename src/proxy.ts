@@ -10,18 +10,41 @@ const RUTAS_MODULOS: Record<string, string> = {
     '/ventas': 'VENTAS',
     '/caja': 'CAJA',
     '/cuentas-corrientes': 'CLIENTES',
+    '/clientes': 'CLIENTES',
     '/inventario': 'INVENTARIO',
     '/historial': 'HISTORIAL',
     '/reportes': 'REPORTES',
-    '/configuracion': 'CONFIGURACION'
+    '/configuracion': 'CONFIGURACION',
+    '/presupuestos': 'PRESUPUESTOS',
+    '/pedidos': 'VENTAS',
+    '/compras': 'INVENTARIO',
+    '/listas-precio': 'INVENTARIO',
+    '/proveedores': 'INVENTARIO',
+    '/transferencias': 'INVENTARIO',
+    '/categorias': 'INVENTARIO',
 };
+
+// Rutas exclusivas de ADMIN — ningún otro rol puede acceder
+const RUTAS_SOLO_ADMIN = ['/usuarios', '/importar', '/configuracion/sucursales'];
+
+// Rutas que un VENDEDOR puede acceder (todo lo demás está bloqueado)
+const RUTAS_VENDEDOR_PERMITIDAS = ['/vendedor', '/login'];
 
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    // 1. Dejar pasar archivos del sistema, imágenes, y la página de login libremente.
+    // 1. Dejar pasar archivos del sistema, imágenes, PWA assets, y la página de login libremente.
     // También dejamos pasar la ruta /imprimir para que los tickets no pidan login al abrirse en ventana nueva.
-    if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname === '/login' || pathname.startsWith('/imprimir')) {
+    if (
+        pathname.startsWith('/_next') ||
+        pathname.startsWith('/api') ||
+        pathname === '/login' ||
+        pathname.startsWith('/imprimir') ||
+        pathname === '/manifest.json' ||
+        pathname === '/sw.js' ||
+        pathname === '/favicon.ico' ||
+        pathname.startsWith('/icons')
+    ) {
         return NextResponse.next();
     }
 
@@ -37,17 +60,31 @@ export async function proxy(request: NextRequest) {
         // 3. Desencriptar el token y leer quién es
         const { payload } = await jwtVerify(sessionToken, key);
         const rol = payload.rol as string;
-        const permisos = payload.permisos as string[];
+        const permisos = (payload.permisos as string[]) || [];
 
-        // Si es el DUEÑO (ADMIN), tiene acceso VIP a todo el sistema. Pasa directo.
+        // ============================================================
+        // REGLA #1: VENDEDORES — Solo pueden acceder a /vendedor
+        // ============================================================
+        if (rol === 'VENDEDOR') {
+            const permitido = RUTAS_VENDEDOR_PERMITIDAS.some(ruta => pathname.startsWith(ruta));
+            if (!permitido) {
+                // Si intenta ir a cualquier otra ruta, lo mandamos a /vendedor
+                return NextResponse.redirect(new URL('/vendedor', request.url));
+            }
+            return NextResponse.next();
+        }
+
+        // ============================================================
+        // REGLA #2: ADMIN — Acceso VIP total al sistema. Pasa directo.
+        // ============================================================
         if (rol === 'ADMIN') return NextResponse.next();
 
-        // --------------------------------------------------------
-        // REGLAS ESTRICTAS PARA EMPLEADOS (CAJEROS)
-        // --------------------------------------------------------
+        // ============================================================
+        // REGLA #3: CAJEROS — Acceso por permisos configurados
+        // ============================================================
 
-        // A) Nunca pueden entrar a gestionar otros usuarios
-        if (pathname.startsWith('/usuarios')) {
+        // A) Rutas exclusivas de ADMIN — siempre bloqueadas para cajeros
+        if (RUTAS_SOLO_ADMIN.some(ruta => pathname.startsWith(ruta))) {
             return NextResponse.redirect(new URL('/', request.url));
         }
 
@@ -67,12 +104,12 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next();
 
     } catch (error) {
-        // Si el token expiró (pasaron las 12 horas) o alguien lo modificó, lo mandamos al login.
+        // Si el token expiró o alguien lo modificó, lo mandamos al login.
         return NextResponse.redirect(new URL('/login', request.url));
     }
 }
 
-// Configuración para que el patovica no pierda el tiempo revisando íconos o archivos estáticos
+// Configuración del matcher — excluye archivos estáticos para que el proxy no pierda tiempo
 export const config = {
-    matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+    matcher: ['/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json|icons).*)'],
 };

@@ -91,6 +91,43 @@ export default function ComprasPage() {
         </CardContent>
       </Card>
 
+      {/* TARJETAS DE RESUMEN */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="shadow-sm border-slate-200 bg-white">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider mb-1">Total Costo Base</p>
+              <p className="text-2xl font-black text-slate-800">
+                ${compras.reduce((acc, c) => acc + (c.costo_base * (c.cantidad || 1)), 0).toFixed(2)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm border-slate-200 bg-white">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider mb-1">Total Impuestos</p>
+              <p className="text-2xl font-black text-amber-600">
+                ${compras.reduce((acc, c) => {
+                  const totalImpUnidad = c.impuestos?.reduce((sum: number, imp: any) => sum + imp.monto, 0) || 0;
+                  return acc + (totalImpUnidad * (c.cantidad || 1));
+                }, 0).toFixed(2)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm border-emerald-200 bg-emerald-50/50">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase text-emerald-600 tracking-wider mb-1">Total Costo Final</p>
+              <p className="text-2xl font-black text-emerald-600">
+                ${compras.reduce((acc, c) => acc + (c.costo_final * (c.cantidad || 1)), 0).toFixed(2)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* TABLA */}
       <Card className="flex-1 shadow-sm border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden flex flex-col">
         <div className="flex-1 overflow-auto">

@@ -30,7 +30,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 import {
-  formatCurrency, calcularPrecioConCascada,
+  formatCurrency, calcularPrecioConCascada, redondearPrecio,
   formatCantidad, getUnidadLabel, getStepParaMedicion,
   type TipoMedicionType,
 } from "@/lib/utils";

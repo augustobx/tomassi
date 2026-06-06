@@ -391,6 +391,19 @@ export function ProductoForm({ initialData, providers: initialProviders, categor
                     aumProv, aumMarca, aumCat, margenFinal
                   );
 
+                  const handlePrecioFijoChange = (nuevoPrecio: string) => {
+                    if (!nuevoPrecio || isNaN(Number(nuevoPrecio))) return;
+                    
+                    const costoNeto = calcularCostoNeto(Number(precioCosto), Number(descuentoProveedor));
+                    const costoIva = calcularCostoIva(costoNeto, Number(alicuotaIva));
+                    const costoBaseCascade = costoIva * (1 + aumProv / 100) * (1 + aumMarca / 100) * (1 + aumCat / 100);
+                    
+                    if (costoBaseCascade <= 0) return;
+                    
+                    const margenCalculado = ((Number(nuevoPrecio) / costoBaseCascade) - 1) * 100;
+                    setValue(`listas_precios.${index}.margen_personalizado`, parseFloat(margenCalculado.toFixed(2)), { shouldValidate: true, shouldDirty: true });
+                  };
+
                   return (
                     <div key={field.id} className={`relative grid grid-cols-1 md:grid-cols-12 gap-4 items-center bg-card border rounded-xl p-4 transition-all ${isActive ? 'border-indigo-500/50 shadow-indigo-500/10 shadow-sm' : 'opacity-60 grayscale-[30%]'}`}>
                       <div className="md:col-span-1 flex items-center justify-center">
@@ -414,11 +427,17 @@ export function ProductoForm({ initialData, providers: initialProviders, categor
                         </div>
                       </div>
                       <div className={`md:col-span-4 space-y-2 ${!isActive ? 'pointer-events-none' : ''}`}>
-                        <Label className="text-xs uppercase text-muted-foreground">Precio Público</Label>
+                        <Label className="text-xs uppercase text-muted-foreground">Precio Público ($)</Label>
                         <div className="relative">
                           <span className="absolute left-3 top-2 text-indigo-500 font-medium">$</span>
-                          <Input type="text" readOnly value={isActive ? (precioFinal || 0).toFixed(2) : "0.00"}
-                            className="pl-8 font-bold text-lg text-indigo-500 bg-indigo-500/10 border-indigo-500/20 focus-visible:ring-transparent" />
+                          <Input 
+                            type="number" 
+                            step="0.01"
+                            disabled={!isActive}
+                            value={isActive ? (precioFinal || 0).toFixed(2) : "0.00"}
+                            onChange={(e) => handlePrecioFijoChange(e.target.value)}
+                            className="pl-8 font-bold text-lg text-indigo-600 bg-indigo-50/50 border-indigo-200 focus-visible:ring-indigo-500" 
+                          />
                         </div>
                       </div>
                     </div>

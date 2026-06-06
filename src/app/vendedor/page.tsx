@@ -4,6 +4,8 @@ import { useState, useEffect, useTransition } from "react";
 import { buscarClientes, buscarProductos, obtenerListasPrecio, obtenerMarcas, obtenerCategorias, obtenerConfiguracionGlobal } from "@/app/actions/ventas";
 import { registrarPedidoPWA, obtenerPedidosVendedor, accionarPedidoVendedor } from "@/app/actions/pedidos";
 import { registrarClientePWA } from "@/app/actions/clientes";
+import { getClientSession } from "@/app/actions/auth";
+import { getFichaCuentaCorriente, registrarPagoCC } from "@/app/actions/cuentas-corrientes";
 import { guardarOffline, obtenerTodosOffline, eliminarOffline, STORE_PEDIDOS, STORE_CLIENTES } from "@/lib/offline-db";
 import { redondearPrecio, calcularPrecioConCascada } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -34,10 +36,21 @@ export default function PwaVendedor() {
     const [pedidosHistorial, setPedidosHistorial] = useState<any[]>([]);
     const [filtroHistorial, setFiltroHistorial] = useState("");
 
-    const [tabActiva, setTabActiva] = useState<'NUEVO' | 'HISTORIAL'>('NUEVO');
+    const [tabActiva, setTabActiva] = useState<'NUEVO' | 'HISTORIAL' | 'COBRANZAS'>('NUEVO');
     const [vistaRemito, setVistaRemito] = useState(false);
     const [catalogoAbierto, setCatalogoAbierto] = useState(false);
     const [modalCliente, setModalCliente] = useState(false);
+    
+    // ==========================================
+    // ESTADOS PARA COBRANZAS
+    // ==========================================
+    const [puedeCobrar, setPuedeCobrar] = useState(false);
+    const [clienteCobranza, setClienteCobranza] = useState<any>(null);
+    const [facturasPendientes, setFacturasPendientes] = useState<any[]>([]);
+    const [facturaSeleccionada, setFacturaSeleccionada] = useState<any>(null);
+    const [montoCobro, setMontoCobro] = useState<string>("");
+    const [metodoCobro, setMetodoCobro] = useState<string>("CONTADO");
+    const [notasCobro, setNotasCobro] = useState<string>("");
 
     // ==========================================
     // ESTADOS DEL PEDIDO ACTUAL
@@ -76,6 +89,10 @@ export default function PwaVendedor() {
         obtenerConfiguracionGlobal().then(setConfiguracionGlobal);
         cargarHistorial();
         intentarSincronizar();
+        
+        getClientSession().then((s) => {
+            if (s && s.permisos && s.permisos.includes("COBRAR_CC")) setPuedeCobrar(true);
+        });
 
         return () => {
             window.removeEventListener('online', handleOnline);
@@ -333,6 +350,63 @@ export default function PwaVendedor() {
     };
 
     // ==========================================
+    // ACCIONES DE COBRANZA
+    // ==========================================
+    const handleSeleccionarClienteCobranza = async (c: any) => {
+        setClienteCobranza(c);
+        setClientesRes([]);
+        setQueryCliente("");
+        if (!isOnline) {
+             toast.error("Necesitás conexión a internet para ver las facturas pendientes.");
+             return;
+        }
+        const toastId = toast.loading("Cargando cuenta corriente...");
+        const res = await getFichaCuentaCorriente(c.id);
+        toast.dismiss(toastId);
+        if (res.success && res.data) {
+             setFacturasPendientes(res.data.ventasPendientes);
+        } else {
+             toast.error(res.error || "Error al cargar facturas.");
+        }
+    };
+
+    const handleProcesarCobro = async () => {
+        if (!facturaSeleccionada || !montoCobro || Number(montoCobro) <= 0) return;
+        if (!isOnline) {
+             toast.error("Necesitás conexión a internet para procesar pagos.");
+             return;
+        }
+        
+        if (Number(montoCobro) > facturaSeleccionada.saldo_pendiente + 0.01) {
+             toast.error("El monto ingresado supera la deuda de la factura.");
+             return;
+        }
+
+        const toastId = toast.loading("Procesando cobro...");
+        const res = await registrarPagoCC({
+            clienteId: clienteCobranza.id,
+            ventaId: facturaSeleccionada.id,
+            monto: Number(montoCobro),
+            metodo_pago: metodoCobro,
+            notas: notasCobro
+        });
+
+        if (res.success) {
+            toast.success("Pago registrado con éxito", { id: toastId });
+            setFacturaSeleccionada(null);
+            setMontoCobro("");
+            setNotasCobro("");
+            // Recargar facturas
+            const resFicha = await getFichaCuentaCorriente(clienteCobranza.id);
+            if (resFicha.success && resFicha.data) {
+                 setFacturasPendientes(resFicha.data.ventasPendientes);
+            }
+        } else {
+            toast.error(res.error || "Error al procesar el cobro", { id: toastId });
+        }
+    };
+
+    // ==========================================
     // RENDERIZADO DE LA INTERFAZ
     // ==========================================
     return (
@@ -351,7 +425,9 @@ export default function PwaVendedor() {
                 <div className="p-4">
                     <div className="flex justify-between items-center mb-6 pt-2">
                         <h1 className="text-2xl font-black text-indigo-950 flex items-center tracking-tight">
-                            {tabActiva === 'NUEVO' ? <><ShoppingCart className="mr-2 h-6 w-6 text-indigo-600" /> Toma de Pedido</> : <><History className="mr-2 h-6 w-6 text-indigo-600" /> Mis Pedidos</>}
+                            {tabActiva === 'NUEVO' && <><ShoppingCart className="mr-2 h-6 w-6 text-indigo-600" /> Toma de Pedido</>}
+                            {tabActiva === 'HISTORIAL' && <><History className="mr-2 h-6 w-6 text-indigo-600" /> Mis Pedidos</>}
+                            {tabActiva === 'COBRANZAS' && <><Bookmark className="mr-2 h-6 w-6 text-indigo-600" /> Cobranzas</>}
                         </h1>
                         <div className="flex gap-2">
                             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isPending} className="bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 font-bold rounded-xl shadow-sm">
@@ -491,6 +567,73 @@ export default function PwaVendedor() {
                             </div>
                         </div>
                     )}
+
+                    {/* COBRANZAS VISTA */}
+                    {tabActiva === 'COBRANZAS' && (
+                        <div className="animate-in fade-in duration-300 pb-24">
+                            {!clienteCobranza ? (
+                                <div className="bg-white p-5 rounded-3xl shadow-sm border border-zinc-200 mb-4">
+                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3 flex items-center"><User className="w-3 h-3 mr-1" /> Búsqueda de Cliente</label>
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-3 h-5 w-5 text-zinc-300" />
+                                        <Input placeholder="Nombre o CUIT..." className="pl-10 h-14 bg-zinc-50 border-zinc-100 rounded-2xl text-base" value={queryCliente} onChange={(e) => setQueryCliente(e.target.value)} />
+                                    </div>
+                                    {clientesRes.length > 0 && (
+                                        <div className="mt-3 border rounded-2xl divide-y bg-white shadow-xl max-h-64 overflow-y-auto border-zinc-100">
+                                            {clientesRes.map(c => (
+                                                <div key={c.id} className="p-4 flex justify-between items-center active:bg-indigo-50" onClick={() => handleSeleccionarClienteCobranza(c)}>
+                                                    <span className="font-bold text-zinc-800">{c.nombre_razon_social}</span>
+                                                    <ChevronRight className="w-4 h-4 text-zinc-300" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div>
+                                    <div className="bg-indigo-600 p-5 rounded-3xl shadow-lg mb-4 text-white relative overflow-hidden">
+                                        <div className="absolute -right-4 -top-4 bg-white/10 w-24 h-24 rounded-full blur-2xl"></div>
+                                        <div className="flex justify-between items-start relative z-10">
+                                            <div className="max-w-[70%]">
+                                                <p className="font-black text-xl leading-none mb-1 truncate">{clienteCobranza.nombre_razon_social}</p>
+                                                <p className="text-sm font-medium text-white/80">Deuda Total: <span className="font-black">${facturasPendientes.reduce((a, b) => a + b.saldo_pendiente, 0).toFixed(2)}</span></p>
+                                            </div>
+                                            <Button variant="ghost" size="sm" onClick={() => setClienteCobranza(null)} className="text-white hover:bg-white/20 h-8 rounded-xl px-3 text-xs font-bold border border-white/30">Cambiar</Button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-4">
+                                        <h3 className="font-black text-zinc-800 text-lg mb-2">Facturas Pendientes</h3>
+                                        {facturasPendientes.length === 0 ? (
+                                            <div className="text-center py-8 text-zinc-400 bg-white rounded-3xl border border-zinc-200 shadow-sm">
+                                                <CheckCircle2 className="h-10 w-10 mx-auto mb-2 text-emerald-400" />
+                                                <p className="font-bold">El cliente no tiene deuda.</p>
+                                            </div>
+                                        ) : (
+                                            facturasPendientes.map((fac) => (
+                                                <Card key={fac.id} className="border-0 shadow-sm rounded-3xl overflow-hidden">
+                                                    <CardContent className="p-5 bg-white flex justify-between items-center">
+                                                        <div>
+                                                            <p className="font-bold text-sm text-zinc-800 leading-tight">Fac #{fac.numero_comprobante}</p>
+                                                            <p className="text-[10px] text-zinc-400 font-bold uppercase mt-1">{new Date(fac.fecha_emision).toLocaleDateString()}</p>
+                                                            <p className="font-black text-lg text-red-500 mt-1">${fac.saldo_pendiente.toFixed(2)}</p>
+                                                        </div>
+                                                        <Button onClick={() => {
+                                                            setFacturaSeleccionada(fac);
+                                                            setMontoCobro(fac.saldo_pendiente.toString());
+                                                            setMetodoCobro("CONTADO");
+                                                        }} className="bg-emerald-500 hover:bg-emerald-600 font-bold shadow-md rounded-xl h-10 px-6">
+                                                            Cobrar
+                                                        </Button>
+                                                    </CardContent>
+                                                </Card>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -505,6 +648,12 @@ export default function PwaVendedor() {
                         <History className="w-6 h-6 mb-1" />
                         <span className="text-[10px] font-black uppercase tracking-widest">Historial</span>
                     </button>
+                    {puedeCobrar && (
+                        <button onClick={() => setTabActiva('COBRANZAS')} className={`flex-1 flex flex-col items-center py-3 ${tabActiva === 'COBRANZAS' ? 'text-indigo-600' : 'text-zinc-400'}`}>
+                            <Bookmark className="w-6 h-6 mb-1" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Cobranzas</span>
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -706,6 +855,55 @@ export default function PwaVendedor() {
                             </Button>
                         </form>
                     </Card>
+                </div>
+            )}
+
+            {/* MODAL COBRANZA */}
+            {facturaSeleccionada && (
+                <div className="fixed inset-0 z-[60] bg-zinc-900 flex flex-col p-4 pt-safe animate-in zoom-in-95 duration-300">
+                    <div className="flex-1 bg-white rounded-3xl p-6 overflow-y-auto relative shadow-2xl">
+                        <Button variant="ghost" size="icon" onClick={() => setFacturaSeleccionada(null)} className="absolute top-4 right-4 bg-zinc-100 rounded-full h-10 w-10 text-zinc-500"><X className="h-5 w-5" /></Button>
+
+                        <div className="text-center border-b border-dashed border-zinc-300 pb-5 mb-5 mt-2">
+                            <h2 className="font-black text-2xl text-zinc-900 tracking-tight">REGISTRAR PAGO</h2>
+                            <p className="text-xs font-bold text-zinc-400 uppercase mt-2">Fac #{facturaSeleccionada.numero_comprobante}</p>
+                        </div>
+
+                        <div className="space-y-4 mb-6">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase">Saldo Pendiente</label>
+                                <p className="font-black text-xl text-red-500">${facturaSeleccionada.saldo_pendiente.toFixed(2)}</p>
+                            </div>
+                            
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase">Monto a Cobrar</label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-4 font-black text-xl text-zinc-400">$</span>
+                                    <Input type="number" step="0.01" value={montoCobro} onChange={(e) => setMontoCobro(e.target.value)} className="pl-8 h-14 rounded-2xl text-xl font-black bg-zinc-50" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase">Método de Pago</label>
+                                <select value={metodoCobro} onChange={(e) => setMetodoCobro(e.target.value)} className="w-full h-14 px-4 rounded-2xl bg-zinc-50 border border-zinc-200 text-sm font-bold outline-none">
+                                    <option value="CONTADO">Efectivo (Contado)</option>
+                                    <option value="TARJETA">Tarjeta</option>
+                                    <option value="TRANSFERENCIA">Transferencia</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase">Notas Adicionales</label>
+                                <Input value={notasCobro} onChange={(e) => setNotasCobro(e.target.value)} placeholder="Ej: Pago parcial..." className="h-12 rounded-2xl bg-zinc-50" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-4 shrink-0">
+                        <Button onClick={handleProcesarCobro} className="w-full h-16 bg-emerald-500 hover:bg-emerald-600 shadow-xl shadow-emerald-500/20 rounded-2xl font-black text-lg text-white">
+                            <CheckCircle2 className="mr-2 h-6 w-6" /> CONFIRMAR PAGO
+                        </Button>
+                    </div>
                 </div>
             )}
         </div>
