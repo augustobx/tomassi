@@ -51,6 +51,7 @@ export default function PwaVendedor() {
     const [montoCobro, setMontoCobro] = useState<string>("");
     const [metodoCobro, setMetodoCobro] = useState<string>("CONTADO");
     const [notasCobro, setNotasCobro] = useState<string>("");
+    const [procesandoCobro, setProcesandoCobro] = useState(false);
 
     // ==========================================
     // ESTADOS DEL PEDIDO ACTUAL
@@ -382,6 +383,7 @@ export default function PwaVendedor() {
              return;
         }
 
+        setProcesandoCobro(true);
         const toastId = toast.loading("Procesando cobro...");
         const res = await registrarPagoCC({
             clienteId: clienteCobranza.id,
@@ -404,6 +406,7 @@ export default function PwaVendedor() {
         } else {
             toast.error(res.error || "Error al procesar el cobro", { id: toastId });
         }
+        setProcesandoCobro(false);
     };
 
     // ==========================================
@@ -900,8 +903,9 @@ export default function PwaVendedor() {
                     </div>
 
                     <div className="pt-4 shrink-0">
-                        <Button onClick={handleProcesarCobro} className="w-full h-16 bg-emerald-500 hover:bg-emerald-600 shadow-xl shadow-emerald-500/20 rounded-2xl font-black text-lg text-white">
-                            <CheckCircle2 className="mr-2 h-6 w-6" /> CONFIRMAR PAGO
+                        <Button disabled={procesandoCobro} onClick={handleProcesarCobro} className="w-full h-16 bg-emerald-500 hover:bg-emerald-600 shadow-xl shadow-emerald-500/20 rounded-2xl font-black text-lg text-white">
+                            {procesandoCobro ? <Loader2 className="mr-2 h-6 w-6 animate-spin" /> : <CheckCircle2 className="mr-2 h-6 w-6" />}
+                            {procesandoCobro ? "PROCESANDO..." : "CONFIRMAR PAGO"}
                         </Button>
                     </div>
                 </div>
