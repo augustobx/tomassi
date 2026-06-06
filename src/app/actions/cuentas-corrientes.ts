@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getClientSession } from "./auth";
 
 // ==========================================
 // 1. DIRECTORIO DE DEUDORES (CON FILTROS)
@@ -107,6 +108,9 @@ export async function registrarPagoCC(data: {
             const cajaAbierta = await tx.cajaDiaria.findFirst({ where: { estado: 'ABIERTA' } });
             if (!cajaAbierta) throw new Error("Debe abrir la caja diaria en el menú Caja para registrar cobros.");
 
+            const session = await getClientSession();
+            const usuarioId = (session as any)?.id ? Number((session as any).id) : null;
+
             // Calcular descuento si aplica
             const descPorcentaje = data.descuento_porcentaje || 0;
             const montoDescuento = data.monto * (descPorcentaje / 100);
@@ -139,7 +143,8 @@ export async function registrarPagoCC(data: {
                     monto: montoAplicado,
                     descuento_pago: montoDescuento,
                     metodo_pago: data.metodo_pago as any,
-                    notas: notasConDescuento
+                    notas: notasConDescuento,
+                    usuarioId: usuarioId
                 }
             });
 
@@ -151,7 +156,8 @@ export async function registrarPagoCC(data: {
                     metodo_pago: data.metodo_pago as any,
                     monto: montoEfectivo, // Lo que realmente entra a caja
                     descripcion: `Abono CC (Fac. #${venta.numero_comprobante})${descPorcentaje > 0 ? ` - Desc. ${descPorcentaje}%` : ''}`,
-                    ventaId: venta.id
+                    ventaId: venta.id,
+                    usuarioId: usuarioId
                 }
             });
         });
