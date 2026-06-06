@@ -14,13 +14,24 @@ export async function getCajaActiva(sucursalId: number) {
             include: {
                 movimientos: { 
                     orderBy: { fecha: 'desc' },
-                    include: { 
-                        usuario: { select: { nombre: true } },
-                        venta: { include: { cliente: true } }
-                    }
+                    include: { usuario: { select: { nombre: true } } }
                 }
             }
         });
+
+        if (caja && caja.movimientos.length > 0) {
+            const ventaIds = caja.movimientos.map((m: any) => m.ventaId).filter((id: any) => id !== null);
+            if (ventaIds.length > 0) {
+                const ventas = await prisma.venta.findMany({
+                    where: { id: { in: ventaIds } },
+                    include: { cliente: true }
+                });
+                caja.movimientos.forEach((m: any) => {
+                    if (m.ventaId) m.venta = ventas.find(v => v.id === m.ventaId);
+                });
+            }
+        }
+
         return { success: true, data: caja };
     } catch (error) {
         return { success: false, error: "Error al consultar la caja." };
@@ -35,15 +46,27 @@ export async function getHistorialCajas(sucursalId: number) {
             include: {
                 movimientos: { 
                     orderBy: { fecha: 'desc' },
-                    include: { 
-                        usuario: { select: { nombre: true } },
-                        venta: { include: { cliente: true } }
-                    }
+                    include: { usuario: { select: { nombre: true } } }
                 }
             },
             orderBy: { fecha_apertura: 'desc' },
             take: 30 // Traemos los últimos 30 turnos para no saturar
         });
+
+        if (cajas && cajas.length > 0) {
+            const allMovs = cajas.flatMap(c => c.movimientos);
+            const ventaIds = allMovs.map((m: any) => m.ventaId).filter((id: any) => id !== null);
+            if (ventaIds.length > 0) {
+                const ventas = await prisma.venta.findMany({
+                    where: { id: { in: ventaIds } },
+                    include: { cliente: true }
+                });
+                allMovs.forEach((m: any) => {
+                    if (m.ventaId) m.venta = ventas.find(v => v.id === m.ventaId);
+                });
+            }
+        }
+
         return { success: true, data: cajas };
     } catch (error) {
         return { success: false, error: "Error al cargar el historial de cajas." };
