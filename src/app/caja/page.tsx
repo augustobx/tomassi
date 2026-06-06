@@ -38,6 +38,8 @@ export default function CajaDiariaPage() {
     const [cajaHistoricaSeleccionada, setCajaHistoricaSeleccionada] = useState<any | null>(null);
     const [showModalHistorial, setShowModalHistorial] = useState(false);
 
+    const [movimientoVer, setMovimientoVer] = useState<any | null>(null);
+
     const [usuarioSesion, setUsuarioSesion] = useState<any>(null);
     const [sucursales, setSucursales] = useState<any[]>([]);
     const [sucursalActivaId, setSucursalActivaId] = useState<number | null>(null);
@@ -358,6 +360,7 @@ export default function CajaDiariaPage() {
                                 <th className="px-6 py-3 font-semibold text-center">Medio</th>
                                 <th className="px-6 py-3 font-semibold text-center">Cajero</th>
                                 <th className="px-6 py-3 font-semibold text-right">Monto</th>
+                                <th className="px-6 py-3 font-semibold text-center">Acciones</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
@@ -380,6 +383,11 @@ export default function CajaDiariaPage() {
                                         </td>
                                         <td className={`px-6 py-3 text-right font-black text-base ${esIngreso ? 'text-slate-900 dark:text-white' : 'text-orange-600'}`}>
                                             {esIngreso ? '+' : '-'}${mov.monto.toFixed(2)}
+                                        </td>
+                                        <td className="px-6 py-3 text-center">
+                                            <Button variant="ghost" size="sm" onClick={() => setMovimientoVer(mov)} className="text-indigo-600 hover:text-indigo-700 bg-indigo-50/50">
+                                                Ver
+                                            </Button>
                                         </td>
                                     </tr>
                                 )
@@ -470,6 +478,7 @@ export default function CajaDiariaPage() {
                                         <th className="px-6 py-3 font-semibold text-center">Medio</th>
                                         <th className="px-6 py-3 font-semibold text-center">Cajero</th>
                                         <th className="px-6 py-3 font-semibold text-right">Monto</th>
+                                        <th className="px-6 py-3 font-semibold text-center">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -493,12 +502,67 @@ export default function CajaDiariaPage() {
                                                 <td className={`px-6 py-2 text-right font-black text-sm ${esIngreso ? 'text-slate-900' : 'text-orange-600'}`}>
                                                     {esIngreso ? '+' : '-'}${mov.monto.toFixed(2)}
                                                 </td>
+                                                <td className="px-6 py-2 text-center">
+                                                    <Button variant="ghost" size="sm" onClick={() => setMovimientoVer(mov)} className="text-indigo-600 hover:text-indigo-700 bg-indigo-50/50">
+                                                        Ver
+                                                    </Button>
+                                                </td>
                                             </tr>
                                         )
                                     })}
                                 </tbody>
                             </table>
                         )}
+                    </CardContent>
+                </Card>
+            </div>
+        )}
+
+        {/* MODAL VER DETALLE DEL MOVIMIENTO */}
+        {movimientoVer && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in zoom-in-95">
+                <Card className="w-full max-w-sm shadow-2xl border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
+                    <CardHeader className="bg-slate-50 border-b border-slate-100 p-4">
+                        <div className="flex justify-between items-center">
+                            <CardTitle className="text-base font-bold text-slate-800">Detalle del Movimiento</CardTitle>
+                            <Button variant="ghost" size="icon" onClick={() => setMovimientoVer(null)} className="h-8 w-8 rounded-full text-slate-500"><X className="h-5 w-5" /></Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-5 space-y-4">
+                        <div className="text-center pb-4 border-b border-slate-100 border-dashed">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{movimientoVer.tipo.replace('_', ' ')}</p>
+                            <p className={`text-3xl font-black mt-1 ${['APERTURA', 'INGRESO_MANUAL', 'VENTA', 'COBRO_CC'].includes(movimientoVer.tipo) ? 'text-emerald-600' : 'text-orange-600'}`}>
+                                ${movimientoVer.monto.toFixed(2)}
+                            </p>
+                            <Badge variant="secondary" className="mt-2 bg-slate-100">{movimientoVer.metodo_pago}</Badge>
+                        </div>
+                        
+                        <div className="space-y-3 pt-2">
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">Concepto / Descripción</p>
+                                <p className="text-sm font-semibold text-slate-800 mt-0.5">{movimientoVer.descripcion}</p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">Hora y Cajero</p>
+                                <p className="text-sm font-medium text-slate-600 mt-0.5">
+                                    {new Date(movimientoVer.fecha).toLocaleString('es-AR')} por {movimientoVer.usuario?.nombre || 'SISTEMA'}
+                                </p>
+                            </div>
+
+                            {/* Info Extra de Venta / Cobro CC */}
+                            {movimientoVer.venta && (
+                                <div className="mt-4 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                                    <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1">Información de la Factura</p>
+                                    <p className="text-sm font-bold text-indigo-950">Cliente: {movimientoVer.venta.cliente?.nombre_razon_social || 'Consumidor Final'}</p>
+                                    <p className="text-xs text-indigo-800 mt-1">Fac. {movimientoVer.venta.tipo_comprobante.replace('_', ' ')} 000{movimientoVer.venta.punto_venta}-{movimientoVer.venta.numero_comprobante}</p>
+                                    <p className="text-xs text-indigo-800 font-bold mt-1">Total Fac: ${movimientoVer.venta.total.toFixed(2)}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <Button onClick={() => setMovimientoVer(null)} className="w-full mt-2 bg-slate-900 text-white hover:bg-slate-800">
+                            Cerrar
+                        </Button>
                     </CardContent>
                 </Card>
             </div>

@@ -14,7 +14,10 @@ export async function getCajaActiva(sucursalId: number) {
             include: {
                 movimientos: { 
                     orderBy: { fecha: 'desc' },
-                    include: { usuario: { select: { nombre: true } } }
+                    include: { 
+                        usuario: { select: { nombre: true } },
+                        venta: { include: { cliente: true } }
+                    }
                 }
             }
         });
@@ -32,7 +35,10 @@ export async function getHistorialCajas(sucursalId: number) {
             include: {
                 movimientos: { 
                     orderBy: { fecha: 'desc' },
-                    include: { usuario: { select: { nombre: true } } }
+                    include: { 
+                        usuario: { select: { nombre: true } },
+                        venta: { include: { cliente: true } }
+                    }
                 }
             },
             orderBy: { fecha_apertura: 'desc' },
