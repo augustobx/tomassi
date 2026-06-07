@@ -52,6 +52,7 @@ export default function PwaVendedor() {
     const [metodoCobro, setMetodoCobro] = useState<string>("CONTADO");
     const [notasCobro, setNotasCobro] = useState<string>("");
     const [procesandoCobro, setProcesandoCobro] = useState(false);
+    const [deudoresList, setDeudoresList] = useState<any[]>([]);
 
     // ==========================================
     // ESTADOS DEL PEDIDO ACTUAL
