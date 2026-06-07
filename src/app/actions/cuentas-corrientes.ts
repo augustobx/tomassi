@@ -155,7 +155,7 @@ export async function registrarPagoCC(data: {
                     tipo: 'COBRO_CC',
                     metodo_pago: data.metodo_pago as any,
                     monto: montoEfectivo, // Lo que realmente entra a caja
-                    descripcion: `Abono CC (Fac. #${venta.numero_comprobante})${descPorcentaje > 0 ? ` - Desc. ${descPorcentaje}%` : ''}`,
+                    descripcion: `Abono CC (Fac. #${venta.numero_comprobante})${descPorcentaje > 0 ? ` - Desc. ${descPorcentaje}%` : ''}${data.notas ? ` | Notas: ${data.notas}` : ''}`,
                     ventaId: venta.id,
                     usuarioId: usuarioId
                 }

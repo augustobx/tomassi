@@ -5,7 +5,7 @@ import { buscarClientes, buscarProductos, obtenerListasPrecio, obtenerMarcas, ob
 import { registrarPedidoPWA, obtenerPedidosVendedor, accionarPedidoVendedor } from "@/app/actions/pedidos";
 import { registrarClientePWA } from "@/app/actions/clientes";
 import { getClientSession } from "@/app/actions/auth";
-import { getFichaCuentaCorriente, registrarPagoCC } from "@/app/actions/cuentas-corrientes";
+import { getClientesDeudores, getFichaCuentaCorriente, registrarPagoCC } from "@/app/actions/cuentas-corrientes";
 import { guardarOffline, obtenerTodosOffline, eliminarOffline, STORE_PEDIDOS, STORE_CLIENTES } from "@/lib/offline-db";
 import { redondearPrecio, calcularPrecioConCascada } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -102,6 +102,18 @@ export default function PwaVendedor() {
     }, []);
 
     const cargarHistorial = () => obtenerPedidosVendedor().then(setPedidosHistorial);
+
+    // Cargar deudores al abrir cobranzas
+    useEffect(() => {
+        if (tabActiva === 'COBRANZAS' && isOnline) {
+            startTransition(async () => {
+                const res = await getClientesDeudores({ estado: 'TODOS' });
+                if (res.success && res.data) {
+                    setDeudoresList(res.data);
+                }
+            });
+        }
+    }, [tabActiva, isOnline]);
 
     // Lógica de sincronización automática
     const intentarSincronizar = async () => {
@@ -581,7 +593,25 @@ export default function PwaVendedor() {
                                         <Search className="absolute left-3 top-3 h-5 w-5 text-zinc-300" />
                                         <Input placeholder="Nombre o CUIT..." className="pl-10 h-14 bg-zinc-50 border-zinc-100 rounded-2xl text-base" value={queryCliente} onChange={(e) => setQueryCliente(e.target.value)} />
                                     </div>
-                                    {clientesRes.length > 0 && (
+                                    
+                                    {queryCliente === "" && deudoresList.length > 0 && (
+                                        <div className="mt-4 space-y-2">
+                                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest pl-2">Clientes con Deuda</p>
+                                            <div className="border rounded-2xl divide-y bg-white shadow-sm border-zinc-100">
+                                                {deudoresList.map(c => (
+                                                    <div key={c.id} className="p-4 flex justify-between items-center active:bg-indigo-50" onClick={() => handleSeleccionarClienteCobranza({ id: c.id, nombre_razon_social: c.nombre })}>
+                                                        <div>
+                                                            <span className="font-bold text-zinc-800 block">{c.nombre}</span>
+                                                            <span className="text-xs font-bold text-red-500 mt-0.5 block">Deuda: ${c.total_deuda.toFixed(2)}</span>
+                                                        </div>
+                                                        <ChevronRight className="w-4 h-4 text-zinc-300" />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {queryCliente !== "" && clientesRes.length > 0 && (
                                         <div className="mt-3 border rounded-2xl divide-y bg-white shadow-xl max-h-64 overflow-y-auto border-zinc-100">
                                             {clientesRes.map(c => (
                                                 <div key={c.id} className="p-4 flex justify-between items-center active:bg-indigo-50" onClick={() => handleSeleccionarClienteCobranza(c)}>
